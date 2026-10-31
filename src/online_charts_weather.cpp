@@ -13,6 +13,7 @@
 #include <wx/filename.h>
 #include <wx/log.h>
 #include <wx/stdpaths.h>
+#include <wx/arrstr.h>
 #include <wx/textfile.h>
 #include <wx/utils.h>
 #include <wx/window.h>
@@ -1351,7 +1352,9 @@ void OnlineChartsWeather::Text(piDC* dc, const wxString& text, double x, double 
 void OnlineChartsWeather::DrawPanel(piDC* dc, PlugIn_ViewPort* viewport) {
   (void)viewport;
   const OnlineChartsConditions c = Current();
-  std::vector<wxString> lines;
+  // wxArrayString rather than std::vector<wxString>: MSVC builds of
+  // wxWidgets import that vector type from the wx DLL only in part.
+  wxArrayString lines;
   lines.push_back("Weather " + c.place.Lower());
   if (!c.wind.empty()) lines.push_back("Wind " + c.wind + (c.gusts.empty() ? wxString() : ", gusts " + c.gusts));
   wxString air = c.air_temp.empty() ? wxString() : "Air " + c.air_temp;
@@ -1369,7 +1372,7 @@ void OnlineChartsWeather::DrawPanel(piDC* dc, PlugIn_ViewPort* viewport) {
   const double left = 60 * ps;
   const double top = 10 * ps;
   double width = 0;
-  for (const auto& line : lines) width = std::max(width, TextWidth(dc, line, text_height));
+  for (size_t i = 0; i < lines.size(); ++i) width = std::max(width, TextWidth(dc, lines[i], text_height));
   const double box_h = line_step * lines.size() + 2 * pad - (line_step - text_height);
   FillRoundRect(dc, left, top, width + 2 * pad, box_h, 6 * ps, wxColour(255, 255, 255, 225));
   for (size_t i = 0; i < lines.size(); ++i) {
