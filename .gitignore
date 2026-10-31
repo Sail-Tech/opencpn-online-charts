@@ -1,0 +1,9 @@
+build/
+build-*/
+cache/
+.musepool/
+*.tar.gz
+*.sha256
+*.xml
+!plugin.xml.in
+.DS_Store

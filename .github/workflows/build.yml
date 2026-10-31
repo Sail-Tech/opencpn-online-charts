@@ -1,0 +1,72 @@
+name: Build OpenCPN import packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    container: debian:12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake g++ make gettext libwxgtk3.2-dev libcurl4-openssl-dev libgl1-mesa-dev libglu1-mesa-dev file ca-certificates
+      - name: Build import tarball
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release '-DOCPN_TARGET_TUPLE=debian-x86_64;12;x86_64'
+          cmake --build build --target tarball --parallel 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OnlineCharts-Linux-x86_64
+          path: |
+            build/*.tar.gz
+            build/*.xml
+            build/*.sha256
+
+  windows-x86_64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build import tarball
+        shell: cmd
+        run: ci\build-windows.bat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OnlineCharts-Windows-x86_64
+          path: |
+            build/*.tar.gz
+            build/*.xml
+            build/*.sha256
+
+  macos-universal:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          brew install cmake gettext
+          curl -fL https://dl.cloudsmith.io/public/nohal/opencpn-plugins/raw/files/macos_deps_universal.tar.xz -o /tmp/macos_deps_universal.tar.xz
+          sudo tar -C /usr/local -xJf /tmp/macos_deps_universal.tar.xz
+      - name: Build universal import tarball
+        run: |
+          export PATH="/usr/local/bin:$(brew --prefix gettext)/bin:$PATH"
+          export WX_CONFIG=/usr/local/lib/wx/config/osx_cocoa-unicode-3.2
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            "-DOCPN_TARGET_TUPLE=darwin-wx32;10;universal"
+          cmake --build build --target tarball --parallel 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OnlineCharts-macOS-universal
+          path: |
+            build/*.tar.gz
+            build/*.xml
+            build/*.sha256

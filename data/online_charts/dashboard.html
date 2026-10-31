@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Online Charts — OpenCPN Dashboard</title>
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon48.png" alt="">
+      <div><strong>Online Charts</strong><span>OpenCPN GPS · OpenStreetMap · Open Waters vectors</span></div>
+    </div>
+    <div class="connection-pill"><span id="statusDot" class="dot"></span><span id="statusText">No GPS connection</span></div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section>
+        <h2>Position</h2>
+        <div class="position-grid">
+          <div><span>Latitude</span><strong id="lat">—</strong></div>
+          <div><span>Longitude</span><strong id="lon">—</strong></div>
+          <div><span>Speed</span><strong id="sog">—</strong></div>
+          <div><span>Course</span><strong id="cog">—</strong></div>
+        </div>
+        <p id="fixMeta" class="muted">Waiting for RMC, GGA, GLL or JSON.</p>
+      </section>
+
+      <section>
+        <h2>GPS input</h2>
+        <label>Connection mode
+          <select id="connectionMode">
+            <option value="websocket">WebSocket / TCP-UDP service</option>
+            <option value="serial">Serial port / N2K gateway</option>
+          </select>
+        </label>
+        <label id="wsRow">WebSocket address
+          <input id="wsUrl" type="text" spellcheck="false" placeholder="ws://127.0.0.1:8766/gps">
+        </label>
+        <div id="serialPortRow" class="hidden">
+          <label>Serial port
+            <select id="serialPortSelect">
+              <option value="">No authorized port found</option>
+            </select>
+          </label>
+          <div class="button-row">
+            <button id="scanSerial" type="button">Scan ports</button>
+            <button id="authorizeSerial" type="button">Add / authorize</button>
+          </div>
+          <p class="hint">Scan lists ports already authorized in Chrome. Use <strong>Add / authorize</strong> to grant access to another port in Chrome's device chooser.</p>
+        </div>
+        <label id="baudRow" class="hidden">Serial baud rate
+          <select id="serialBaud">
+            <option>4800</option><option>9600</option><option>19200</option>
+            <option>38400</option><option>57600</option><option>115200</option>
+          </select>
+        </label>
+        <div class="button-row">
+          <button id="connect" class="primary">Connect</button>
+          <button id="disconnect" disabled>Disconnect</button>
+        </div>
+        <button id="simulate" class="secondary full">Test with simulated position</button>
+        <p class="hint">TCP/UDP: run <code>bridge/gps_bridge.py</code> and connect to the local WebSocket. For N2K, configure the gateway for NMEA 0183, JSON or Signal K.</p>
+      </section>
+
+      <section>
+        <h2>Chart provider</h2>
+        <label>Provider
+          <select id="provider">
+            <option value="iboating">i-Boating</option>
+            <option value="cmap">C-MAP Pin Location</option>
+          </select>
+        </label>
+        <label>URL zoom (i-Boating) <input id="zoom" type="number" min="1" max="19" step="0.01"></label>
+        <label class="check"><input id="autoCenterProvider" type="checkbox"> Follow GPS in provider tab</label>
+        <label>Minimum update interval (seconds) <input id="updateSeconds" type="number" min="1" max="60" step="1"></label>
+        <button id="openProvider" class="primary full">Open / center provider</button>
+        <p class="hint">i-Boating accepts position and zoom in the URL. C-MAP opens a temporary <strong>Pinned location</strong> at the GPS coordinates. Nothing is saved unless you explicitly select <strong>Save</strong> on the C-MAP page.</p>
+      </section>
+
+      <section>
+        <h2>Online chart</h2>
+        <p class="hint"><strong>Land base:</strong> OpenStreetMap.<br><strong>Bathymetry:</strong> Open Waters Seascape MVT/PBF vector tiles, loaded online for the current view.</p>
+        <label class="check"><input id="bathymetryEnabled" type="checkbox" checked> Show vector bathymetry</label>
+        <p class="hint">Depth areas, contours and EMODnet/GEBCO soundings. In European waters, the native resolution is approximately 115 m; this is not equivalent to C-MAP HRB or sonar contours.</p>
+        <label class="check"><input id="followBoat" type="checkbox" checked> Follow vessel on dashboard</label>
+        <button id="centerBoat" class="secondary full">Center on vessel</button>
+        <button id="clearTrack" class="link-button">Clear track</button>
+      </section>
+
+      <section>
+        <h2>Offline chart cache</h2>
+        <label class="check"><input id="cacheEnabled" type="checkbox" checked> Enable offline cache</label>
+        <label>Maximum cache size (MB) <input id="cacheMaxMB" type="number" min="16" max="2048" step="16"></label>
+        <p id="cacheStatus" class="muted">Preparing cache…</p>
+        <button id="clearCache" class="secondary full">Clear cached charts</button>
+        <p class="hint">OSM tiles, Open Waters vector tiles and fonts viewed while online are stored for later use without Internet. Only previously viewed resources are available offline; this does not download a complete region. The oldest entries are removed when the limit is reached.</p>
+      </section>
+
+      <p class="warning">Experimental chart. Do not use as a primary navigation source. Check every provider's licenses and terms.</p>
+    </aside>
+
+    <section class="map-area">
+      <div id="map"></div>
+      <div id="mapNotice" class="map-notice">The chart will be centered when the first position arrives.</div>
+      <div class="map-footer"><span id="eventLog">Dashboard ready.</span><span id="clock"></span></div>
+    </section>
+  </main>
+
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="web-shim.js"></script>
+  <script src="cache.js"></script>
+  <script src="bathymetry.js"></script>
+  <script src="nmea.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

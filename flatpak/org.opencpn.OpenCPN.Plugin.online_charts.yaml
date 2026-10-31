@@ -1,0 +1,23 @@
+id: org.opencpn.OpenCPN.Plugin.@plugin_name
+runtime: org.opencpn.OpenCPN
+runtime-version: stable
+sdk: org.freedesktop.Sdk//24.08
+build-extension: true
+separate-locales: false
+appstream-compose: false
+finish-args:
+  - --socket=x11
+  - --device=all
+modules:
+  - name: @app_id
+    no-autogen: true
+    buildsystem: cmake
+    config-opts:
+      - -DCMAKE_INSTALL_PREFIX=/app/extensions/@app_id
+      - -DCMAKE_BUILD_TYPE:STRING=Release
+      - -DBUILD_TYPE:STRING=tarball
+      - -Uplugin_target
+    sources:
+      - type: git
+        url: ..
+        branch: HEAD

@@ -1,0 +1,67 @@
+# Local setup for Online Charts.
+set(OCPN_TEST_REPO "opencpn/online-charts-alpha" CACHE STRING "Development repository")
+set(OCPN_BETA_REPO "opencpn/online-charts-beta" CACHE STRING "Beta repository")
+set(OCPN_RELEASE_REPO "opencpn/online-charts-prod" CACHE STRING "Release repository")
+
+set(PKG_NAME online_charts_pi)
+set(PKG_VERSION 1.4.0)
+set(PKG_PRERELEASE "")
+set(DISPLAY_NAME OnlineCharts)
+set(PLUGIN_API_NAME OnlineCharts)
+set(PKG_SUMMARY "Online bathymetry, seamarks and marine weather on OpenCPN charts")
+set(PKG_DESCRIPTION [=[Draws public Open Waters bathymetry (depth areas, contours, soundings), OpenSeaMap seamarks and an optional OpenStreetMap or Esri base map on the OpenCPN chart, with an Open-Meteo / MET Norway marine forecast: wind barbs, wave and ocean-current arrows, a Weather window, a 72-hour forecast time bar and offline caches. Includes an Open provider button for i-Boating and C-MAP at the boat position. Experimental display; not a navigation source.]=])
+set(PKG_AUTHOR "OpenCPN Online Charts contributors")
+set(PKG_IS_OPEN_SOURCE "yes")
+set(PKG_HOMEPAGE "https://github.com/Sail-Tech/opencpn-online-charts")
+set(PKG_INFO_URL "https://github.com/Sail-Tech/opencpn-online-charts")
+
+set(SRC
+    src/online_charts_pi.h
+    src/online_charts_pi.cpp
+    src/online_charts_server.h
+    src/online_charts_server.cpp
+    src/online_charts_mvt.h
+    src/online_charts_mvt.cpp
+    src/online_charts_land.h
+    src/online_charts_land.cpp
+    src/online_charts_overlay.h
+    src/online_charts_overlay.cpp
+    src/online_charts_preferences.h
+    src/online_charts_preferences.cpp
+    src/online_charts_render.h
+    src/online_charts_render.cpp
+    src/online_charts_json.h
+    src/online_charts_json.cpp
+    src/online_charts_http.h
+    src/online_charts_http.cpp
+    src/online_charts_weather.h
+    src/online_charts_weather.cpp
+    src/online_charts_weather_window.h
+    src/online_charts_weather_window.cpp
+    libs/civetweb/civetweb.c
+)
+set(PKG_API_LIB api-18)
+
+macro(late_init)
+  target_include_directories(${PACKAGE_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/libs/civetweb")
+  target_compile_definitions(${PACKAGE_NAME} PRIVATE USE_WEBSOCKET NO_SSL NO_CGI)
+  if (WIN32)
+    target_link_libraries(${PACKAGE_NAME} ws2_32)
+  else ()
+    find_package(Threads REQUIRED)
+    target_link_libraries(${PACKAGE_NAME} Threads::Threads ${CMAKE_DL_LIBS})
+  endif ()
+endmacro()
+
+macro(add_plugin_libraries)
+  add_subdirectory(opencpn-libs/plugin_dc)
+  target_link_libraries(${PACKAGE_NAME} ocpn::plugin-dc)
+  if (UNIX AND NOT APPLE)
+    # Debian's wxWidgets builds disable wxWebRequest; use asynchronous HTTPS
+    # through libcurl there. macOS and Windows use the wx native backend.
+    find_package(CURL REQUIRED)
+    target_link_libraries(${PACKAGE_NAME} CURL::libcurl)
+  endif ()
+  # Public Open Waters tiles only. No provider credentials or protected
+  # endpoints are used, and no access controls are bypassed.
+endmacro()
