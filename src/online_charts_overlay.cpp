@@ -1162,7 +1162,7 @@ void OnlineChartsOverlay::DrawLabels(piDC* dc, PlugIn_ViewPort* viewport,
                                      const std::vector<LabelCandidate>& candidates,
                                      float height, size_t* drawn_soundings) {
   (void)viewport;
-  const float small = height * 0.72f;
+  const float decimal_height = height * 0.72f;
   const int margin = static_cast<int>(std::lround(4 * pixel_scale_));
   wxFont regular;
   wxFont italic;
@@ -1176,7 +1176,7 @@ void OnlineChartsOverlay::DrawLabels(piDC* dc, PlugIn_ViewPort* viewport,
     regular = OpenCPNFont("ChartTexts", 12, wxFONTSTYLE_NORMAL, pixels);
     italic = OpenCPNFont("ChartTexts", 12, wxFONTSTYLE_ITALIC, pixels);
     italic_small = OpenCPNFont("ChartTexts", 12, wxFONTSTYLE_ITALIC,
-                               std::max(5, static_cast<int>(std::lround(small))));
+                               std::max(5, static_cast<int>(std::lround(decimal_height))));
   }
 
   LabelGrid grid;
@@ -1187,7 +1187,7 @@ void OnlineChartsOverlay::DrawLabels(piDC* dc, PlugIn_ViewPort* viewport,
     if (gl_pass_) {
       const auto& atlas = label.sounding ? text_italic_ : text_regular_;
       atlas.Measure(label.text, height, &whole_w, &line_h);
-      if (!label.decimal.empty()) text_italic_.Measure(label.decimal, small, &decimal_w, nullptr);
+      if (!label.decimal.empty()) text_italic_.Measure(label.decimal, decimal_height, &decimal_w, nullptr);
     } else {
       wxCoord w = 0, h = 0;
       dc->SetFont(label.sounding ? italic : regular);
@@ -1211,7 +1211,7 @@ void OnlineChartsOverlay::DrawLabels(piDC* dc, PlugIn_ViewPort* viewport,
       const auto& atlas = label.sounding ? text_italic_ : text_regular_;
       atlas.Draw(label.text, left, top, height, LabelColour(), HaloColour());
       if (!label.decimal.empty()) {
-        text_italic_.Draw(label.decimal, left + whole_w, top + line_h * 0.42f, small,
+        text_italic_.Draw(label.decimal, left + whole_w, top + line_h * 0.42f, decimal_height,
                           LabelColour(), HaloColour());
       }
     } else {

@@ -33,9 +33,9 @@ OnlineChartsWeatherWindow::OnlineChartsWeatherWindow(wxWindow* parent, OnlineCha
   auto* main = new wxBoxSizer(wxVERTICAL);
 
   place_ = new wxStaticText(panel, wxID_ANY, wxEmptyString);
-  wxFont small = place_->GetFont();
-  small.SetPointSize(std::max(8, small.GetPointSize() - 1));
-  place_->SetFont(small);
+  wxFont small_font = place_->GetFont();
+  small_font.SetPointSize(std::max(8, small_font.GetPointSize() - 1));
+  place_->SetFont(small_font);
   main->Add(place_, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, 10);
 
   auto* grid = new wxGridSizer(2, kGap, kGap);
@@ -48,10 +48,10 @@ OnlineChartsWeatherWindow::OnlineChartsWeatherWindow(wxWindow* parent, OnlineCha
   main->Add(grid, 0, wxALL | wxEXPAND, 10);
 
   when_ = new wxStaticText(panel, wxID_ANY, wxEmptyString);
-  when_->SetFont(small);
+  when_->SetFont(small_font);
   main->Add(when_, 0, wxLEFT | wxRIGHT | wxEXPAND, 10);
   status_ = new wxStaticText(panel, wxID_ANY, wxEmptyString);
-  status_->SetFont(small);
+  status_->SetFont(small_font);
   status_->SetForegroundColour(wxColour(110, 125, 132));
   main->Add(status_, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 10);
 

@@ -1467,11 +1467,11 @@ void OnlineChartsWeather::DrawTimeline(piDC* dc) {
   // "Now" or "+N h", the local time, and the Now button.
   const wxString big = settings_.forecast_hour ? wxString::Format("+%d h", settings_.forecast_hour)
                                                : wxString("Now");
-  const wxString small = wxDateTime(static_cast<time_t>(TargetTime())).Format("%a %H:00");
+  const wxString time_text = wxDateTime(static_cast<time_t>(TargetTime())).Format("%a %H:00");
   const double big_h = l.h * 0.38 * s;
   const double small_h = l.h * 0.28 * s;
   Text(dc, big, l.label_x * s - TextWidth(dc, big, big_h, true), (l.y + l.h * 0.08) * s, big_h, white, true);
-  Text(dc, small, l.label_x * s - TextWidth(dc, small, small_h), (l.y + l.h * 0.56) * s, small_h,
+  Text(dc, time_text, l.label_x * s - TextWidth(dc, time_text, small_h), (l.y + l.h * 0.56) * s, small_h,
        wxColour(200, 215, 222));
   FillRoundRect(dc, l.now_x * s, l.now_y * s, l.now_w * s, l.now_h * s, 8 * s,
                 settings_.forecast_hour ? wxColour(255, 255, 255, 45) : wxColour(255, 255, 255, 20));
