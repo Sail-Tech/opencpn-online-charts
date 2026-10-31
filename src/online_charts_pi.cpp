@@ -278,7 +278,10 @@ int OnlineChartsPi::Init() {
 bool OnlineChartsPi::DeInit() {
   wxLogMessage("Online Charts: DeInit started");
   if (weather_window_) {
-    weather_window_->Destroy();
+    // Delete now rather than with Destroy(): Destroy() defers the deletion of
+    // a top-level window until OpenCPN exits, after this plugin library has
+    // been unloaded, and the destructor call then crashes OpenCPN.
+    delete weather_window_;
     weather_window_ = nullptr;
   }
   if (weather_tool_id_ >= 0) {

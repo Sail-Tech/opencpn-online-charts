@@ -35,7 +35,7 @@ A native [OpenCPN](https://opencpn.org) plugin that draws free online marine dat
 1. Download the package for your system from the [Releases](../../releases) page:
    - **macOS 11 or later**, universal (Intel and Apple Silicon): `OnlineCharts-…-darwin-wx32-10-universal.tar.gz`.
    - **Debian 12 / Ubuntu-based Linux**, x86-64: `OnlineCharts-…-debian-x86_64-12-x86_64.tar.gz`.
-   - **Windows 10/11**: `OnlineCharts-…-msvc-wx32-10-….tar.gz`.
+   - **Windows 10/11**, 64-bit: `OnlineCharts-…-msvc-64-10-x86_64.tar.gz`.
 2. In OpenCPN open **Options → Plugins**, choose **Import plugin…** and select the downloaded `.tar.gz`. Do not unpack or rename it.
 3. Enable **OnlineCharts** in the plugin list and restart OpenCPN if asked.
 4. Three buttons appear in the toolbar:

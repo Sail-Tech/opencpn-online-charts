@@ -19,6 +19,8 @@ Release history of the OpenCPN Online Charts plugin, newest first. Build and val
 
 **Weather.** See [Weather](#weather): the Weather window and toolbar button, the forecast time bar on the chart, the wind and wave field on a cached lattice, the 72-hour cache and the handling of Open-Meteo's limits. The plugin now asks OpenCPN for position fixes (`WANTS_NMEA_EVENTS`) to place the wind barb at the boat, and for chart mouse events (`WANTS_MOUSE_EVENTS`) for the time bar and the field read-out.
 
+**Exit crash.** The Weather window is deleted when the plugin unloads. `Destroy()` deferred its deletion until OpenCPN exited, after the plugin library had been unloaded, and OpenCPN then crashed on exit.
+
 **Exit safety.** Constant colours are functions rather than global objects, so the library registers no exit-time destructors (`__cxa_atexit`), as required since 1.2.4.
 
 Tested on an Intel Mac with OpenCPN 5.14.2: overlay timing, labels at two zooms, the weather panel and fields, all three preference tabs and a clean quit. The Apple Silicon slice was built but not run. Windows and Linux were not built here; the Linux build uses the new libcurl path in `online_charts_http.cpp`, which has not been compiled.
