@@ -57,15 +57,6 @@ if (${BUILD_TYPE} STREQUAL "tarball" OR ${BUILD_TYPE} STREQUAL "flatpak")
   ")
 endif()
 
-# On macos, fix paths which points to the build environment, make sure they
-# refers to runtime locations
-if (${BUILD_TYPE} STREQUAL "tarball" AND APPLE)
-  install(CODE
-    "execute_process(
-      COMMAND bash -c ${PROJECT_SOURCE_DIR}/cmake/fix-macos-libs.sh
-    )"
-  )
-endif()
 
 if (CMAKE_BUILD_TYPE MATCHES "Release|MinSizeRel")
   if (APPLE)
@@ -90,3 +81,20 @@ if (CMAKE_BUILD_TYPE MATCHES "Release|MinSizeRel")
     ")
   endif ()
 endif ()
+
+# On macOS, point the wxWidgets libraries at the copies inside OpenCPN.app and
+# re-sign the library. This runs last, after stripping: changing the load
+# commands or stripping invalidates the signature, and an arm64 library with an
+# invalid signature does not load.
+if (${BUILD_TYPE} STREQUAL "tarball" AND APPLE)
+  install(CODE
+    "execute_process(
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+      COMMAND bash ${PROJECT_SOURCE_DIR}/cmake/fix-macos-libs.sh app/files
+      RESULT_VARIABLE _fix_result
+    )
+    if (NOT _fix_result EQUAL 0)
+      message(FATAL_ERROR \"fix-macos-libs.sh failed\")
+    endif ()"
+  )
+endif()
