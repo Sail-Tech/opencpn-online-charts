@@ -1,5 +1,9 @@
 # Build and validation status
 
+## Version 1.5.2 — Windows crash when enabling the plugin
+
+The 1.5.1 `msvc-wx32` package imported in OpenCPN 5.14.2 (32-bit, Windows 10 22H2), then OpenCPN crashed when the plugin was enabled. The crash dump shows an access violation reading address 0 in `msvcp140.dll` 14.12.25810 (OpenCPN's own copy), called from `_Mtx_lock` in the plugin (`online_charts_pi.dll+0x97d4`, `OnlineChartsServer`'s mutex). Visual Studio 2022 17.10 made the `std::mutex` constructor constexpr, which requires runtime 14.40 or later. The Windows build now defines `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR`.
+
 ## Version 1.5.1 — Package for the 32-bit Windows OpenCPN
 
 The Windows CI job now builds two packages: `msvc-wx32` (Win32, wxWidgets 3.2.6) and `msvc-64` (x64, wxWidgets 3.3.4). OpenCPN's `PluginHandler::IsCompatible` accepts an `msvc*` package only when its target equals the host's own target: `msvc-wx32` for 32-bit builds (all of 5.8–5.14.0), `msvc-64` for 64-bit builds (5.14.2 and later; 5.14.0 had no 64-bit Windows build). Not yet checked: either Windows package imported and run in OpenCPN on Windows.

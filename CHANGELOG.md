@@ -2,6 +2,10 @@
 
 Release history of the OpenCPN Online Charts plugin, newest first. Build and validation notes for each release are in [BUILD_STATUS.md](BUILD_STATUS.md).
 
+## 1.5.2 — Windows crash when enabling the plugin
+
+**Windows.** OpenCPN crashed as soon as the plugin was enabled. OpenCPN 5.14.2 ships an old C++ runtime (`msvcp140.dll` 14.12, from Visual Studio 2017) next to `opencpn.exe`, and the plugin is built with Visual Studio 2022, whose `std::mutex` needs runtime 14.40 or later since version 17.10. The local dashboard server's first lock was an access violation inside `msvcp140.dll` (`_Mtx_lock`). The Windows build now defines `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR`, Microsoft's documented fix for older runtimes. No other changes.
+
 ## 1.5.1 — Package for the 32-bit Windows OpenCPN
 
 **Windows.** Version 1.5.0 had only a 64-bit Windows package (`msvc-64`). A 32-bit OpenCPN (`msvc-wx32`: every Windows OpenCPN from 5.8 to 5.14.0, and 32-bit installs of later versions) refused it with *Incompatible import plugin detected*. Each release now has both packages: `msvc-wx32-10-x86` for the 32-bit OpenCPN and `msvc-64-10-x86_64` for the 64-bit one. The 64-bit package's metadata now says `x86_64` instead of `x86`. No other changes.

@@ -582,7 +582,7 @@ void OnlineChartsOverlay::StartDownload(const TileKey& key) {
   }
   request.SetHeader("Accept", "application/x-protobuf, application/octet-stream");
   request.SetHeader("Accept-Encoding", "identity");
-  request.SetHeader("User-Agent", "OnlineCharts-OpenCPN/1.5.1");
+  request.SetHeader("User-Agent", "OnlineCharts-OpenCPN/1.5.2");
   pending.request = request;
 #else
   if (!curl_multi_) {
@@ -596,7 +596,7 @@ void OnlineChartsOverlay::StartDownload(const TileKey& key) {
   }
   const std::string url_utf8 = url.ToUTF8().data();
   curl_easy_setopt(easy, CURLOPT_URL, url_utf8.c_str());
-  curl_easy_setopt(easy, CURLOPT_USERAGENT, "OnlineCharts-OpenCPN/1.5.1");
+  curl_easy_setopt(easy, CURLOPT_USERAGENT, "OnlineCharts-OpenCPN/1.5.2");
   curl_easy_setopt(easy, CURLOPT_ACCEPT_ENCODING, "identity");
   curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
   curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT, 10L);

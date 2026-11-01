@@ -4,7 +4,7 @@ set(OCPN_BETA_REPO "opencpn/online-charts-beta" CACHE STRING "Beta repository")
 set(OCPN_RELEASE_REPO "opencpn/online-charts-prod" CACHE STRING "Release repository")
 
 set(PKG_NAME online_charts_pi)
-set(PKG_VERSION 1.5.1)
+set(PKG_VERSION 1.5.2)
 set(PKG_PRERELEASE "")
 set(DISPLAY_NAME OnlineCharts)
 set(PLUGIN_API_NAME OnlineCharts)
@@ -48,7 +48,15 @@ macro(late_init)
   target_compile_definitions(${PACKAGE_NAME} PRIVATE USE_WEBSOCKET NO_SSL NO_CGI)
   if (WIN32)
     target_link_libraries(${PACKAGE_NAME} ws2_32)
-  else ()
+  endif ()
+  if (MSVC)
+    # OpenCPN ships an old msvcp140.dll (14.12 in 5.14.2) next to opencpn.exe.
+    # Since Visual Studio 2022 17.10 std::mutex has a constexpr constructor
+    # that needs runtime 14.40 or later; with the older runtime the first lock
+    # is an access violation inside msvcp140 (_Mtx_lock).
+    target_compile_definitions(${PACKAGE_NAME} PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+  endif ()
+  if (NOT WIN32)
     find_package(Threads REQUIRED)
     target_link_libraries(${PACKAGE_NAME} Threads::Threads ${CMAKE_DL_LIBS})
   endif ()
