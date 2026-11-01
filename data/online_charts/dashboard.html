@@ -72,13 +72,14 @@
           <select id="provider">
             <option value="iboating">i-Boating</option>
             <option value="cmap">C-MAP Pin Location</option>
+            <option value="garmin">Garmin Marine</option>
           </select>
         </label>
         <label>URL zoom (i-Boating) <input id="zoom" type="number" min="1" max="19" step="0.01"></label>
         <label class="check"><input id="autoCenterProvider" type="checkbox"> Follow GPS in provider tab</label>
         <label>Minimum update interval (seconds) <input id="updateSeconds" type="number" min="1" max="60" step="1"></label>
         <button id="openProvider" class="primary full">Open / center provider</button>
-        <p class="hint">i-Boating accepts position and zoom in the URL. C-MAP opens a temporary <strong>Pinned location</strong> at the GPS coordinates. Nothing is saved unless you explicitly select <strong>Save</strong> on the C-MAP page.</p>
+        <p class="hint">i-Boating accepts position and zoom in the URL. C-MAP opens a temporary <strong>Pinned location</strong> at the GPS coordinates. Nothing is saved unless you explicitly select <strong>Save</strong> on the C-MAP page. Garmin Marine opens centred on the GPS position and is not followed; click the map centre to place its marker.</p>
       </section>
 
       <section>

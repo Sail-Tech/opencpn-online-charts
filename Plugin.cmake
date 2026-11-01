@@ -30,6 +30,7 @@ set(SRC
     src/online_charts_preferences.cpp
     src/online_charts_render.h
     src/online_charts_render.cpp
+    src/online_charts_geohash.h
     src/online_charts_json.h
     src/online_charts_json.cpp
     src/online_charts_http.h

@@ -1,5 +1,6 @@
 #include "online_charts_pi.h"
 
+#include "online_charts_geohash.h"
 #include "online_charts_overlay.h"
 #include "online_charts_preferences.h"
 #include "pidc.h"
@@ -255,7 +256,7 @@ int OnlineChartsPi::Init() {
     provider_tool_id_ = InsertPlugInToolSVG(
         "Open provider", provider_icon, provider_icon, provider_icon, wxITEM_NORMAL,
         "Open provider at the boat position",
-        "Open i-Boating or C-MAP in the web browser at the boat position (or the chart centre)",
+        "Open i-Boating, C-MAP or Garmin Marine in the web browser at the boat position (or the chart centre)",
         nullptr, -1, 0, this);
   }
   if (wxFileConfig* config = GetOCPNConfigObject()) {
@@ -377,13 +378,14 @@ void OnlineChartsPi::OpenProviderMenu() {
     wxMessageBox("Move the chart once, then try again.", "Open provider", wxOK | wxICON_INFORMATION);
     return;
   }
-  enum { kIBoating = wxID_HIGHEST + 1, kCMap, kInfo };
+  enum { kIBoating = wxID_HIGHEST + 1, kCMap, kGarmin, kInfo };
   wxMenu menu;
   menu.Append(kInfo, at_boat ? "At the boat position (GPS)" : "At the chart centre (no live GPS fix)");
   menu.Enable(kInfo, false);
   menu.AppendSeparator();
   menu.Append(kIBoating, "Open i-Boating");
   menu.Append(kCMap, "Open C-MAP (Pin location)");
+  menu.Append(kGarmin, "Open Garmin Marine");
   wxWindow* canvas = GetOCPNCanvasWindow();
   const int choice = canvas->GetPopupMenuSelectionFromUser(menu, canvas->ScreenToClient(wxGetMousePosition()));
   wxString url;
@@ -396,6 +398,10 @@ void OnlineChartsPi::OpenProviderMenu() {
     // C-MAP's Pin location route takes longitude first.
     url = wxString::FromUTF8(("https://appchart.c-map.com/core/select/new_place/@" + Decimal(lon, 6) + "," +
                               Decimal(lat, 6)).c_str());
+  } else if (choice == kGarmin) {
+    // Garmin centres its map on the geohash in `key`. Without the browser
+    // extension its own marker cannot be placed: click the map centre for it.
+    url = wxString::FromUTF8(online_charts::GarminMarineUrl(lat, lon).c_str());
   }
   if (!url.empty() && !wxLaunchDefaultBrowser(url)) {
     wxMessageBox("The web browser could not be opened.", "Open provider", wxOK | wxICON_WARNING);

@@ -50,7 +50,38 @@ window.OPENCPN_PLUGIN = true;
     return {};
   }
 
+  // Standard base-32 geohash: Garmin's Marine page centres its map on `key`.
+  function geohash(latitude, longitude, precision = 12) {
+    const alphabet = '0123456789bcdefghjkmnpqrstuvwxyz';
+    let latMin = -90, latMax = 90, lonMin = -180, lonMax = 180;
+    let even = true, bit = 0, value = 0, result = '';
+    while (result.length < precision) {
+      if (even) {
+        const middle = (lonMin + lonMax) / 2;
+        if (longitude >= middle) { value = value * 2 + 1; lonMin = middle; } else { value *= 2; lonMax = middle; }
+      } else {
+        const middle = (latMin + latMax) / 2;
+        if (latitude >= middle) { value = value * 2 + 1; latMin = middle; } else { value *= 2; latMax = middle; }
+      }
+      even = !even;
+      if (++bit === 5) {
+        result += alphabet[value];
+        bit = 0;
+        value = 0;
+      }
+    }
+    return result;
+  }
+
+  function validFix(fix) {
+    return fix && Number.isFinite(Number(fix.lat)) && Number.isFinite(Number(fix.lon)) &&
+      Math.abs(fix.lat) <= 90 && Math.abs(fix.lon) <= 180;
+  }
+
   function providerUrl(provider, fix, zoom) {
+    if (provider === 'garmin') {
+      return `https://maps.garmin.com/en-GB/marine/?maps=another-brand&overlay=false&key=${geohash(Number(fix.lat), Number(fix.lon))}`;
+    }
     if (provider === 'cmap') {
       return `https://appchart.c-map.com/core/select/new_place/@${Number(fix.lon).toFixed(6)},${Number(fix.lat).toFixed(6)}`;
     }
@@ -70,6 +101,8 @@ window.OPENCPN_PLUGIN = true;
 
   function updateProvider(config, force = false) {
     if (!providerWindow || providerWindow.closed || !latestFix) return;
+    // Reloading Garmin at a new position would remove the marker clicked on its map.
+    if (config.provider === 'garmin') return;
     const now = Date.now();
     const moved = distanceMeters(lastProviderPosition, latestFix);
     if (!force && (!providerAutoCenter || now - lastProviderUpdate < Number(config.updateSeconds || 5) * 1000)) return;
@@ -97,10 +130,19 @@ window.OPENCPN_PLUGIN = true;
     }
     if (request.type === 'OPEN_PROVIDER') {
       const config = { ...DEFAULTS, ...read() };
+      const provider = request.provider || config.provider;
+      // Garmin is never opened at the demonstration position below.
+      if (provider === 'garmin' && !validFix(latestFix || config.latestFix)) {
+        return { ok: false, error: 'Garmin needs a GPS position; no demonstration position is used.' };
+      }
       latestFix = latestFix || config.latestFix || { lat: 50.775, lon: -1.3 };
-      providerAutoCenter = request.follow ?? config.autoCenterProvider;
-      await write({ autoCenterProvider: providerAutoCenter });
-      const url = providerUrl(request.provider || config.provider, latestFix, config.zoom);
+      if (provider === 'garmin') {
+        providerAutoCenter = false;
+      } else {
+        providerAutoCenter = request.follow ?? config.autoCenterProvider;
+        await write({ autoCenterProvider: providerAutoCenter });
+      }
+      const url = providerUrl(provider, latestFix, config.zoom);
       if (!providerWindow || providerWindow.closed) providerWindow = window.open(url, '_blank');
       else {
         providerWindow.location.href = url;

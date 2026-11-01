@@ -4,6 +4,8 @@ Release history of the OpenCPN Online Charts plugin, newest first. Build and val
 
 ## Unreleased
 
+**Garmin Marine.** **Open provider** has a third choice, **Open Garmin Marine**, which opens Garmin's English Marine page centred on the boat (or the chart centre without a GPS fix), as a 12-character geohash in the `key` parameter, the same URL as the GPS Charts extension 0.7.0. Without the extension Garmin's own marker is not placed: click the map centre to mark the boat. The bundled browser dashboard lists Garmin too; it never opens Garmin at its demonstration position and does not reload Garmin to follow the boat, which would remove the marker. New `tests/geohash_test.cpp`.
+
 **Offline cache.** The disk cache kept at most 4096 tiles, while **Save visible area for offline use** can save up to 5000, so a large saved area lost its oldest tiles as soon as the cache was trimmed. The cache now holds up to 20000 tiles, the tiles of the latest saved area are never trimmed, and a pass that starts trimming goes down to 90% of the limits instead of stopping just below them. Saving an area now reports its estimated size and refuses an area larger than the maximum cache size allows.
 
 ## 1.4.0 — Drawing speed, dashboard-sized labels and weather

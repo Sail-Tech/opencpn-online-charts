@@ -432,6 +432,7 @@ async function initialize() {
     await Promise.all(['provider', 'zoom', 'autoCenterProvider', 'updateSeconds'].map(saveSetting));
     const response = await chrome.runtime.sendMessage({ type: 'OPEN_PROVIDER', provider: config.provider, follow: config.autoCenterProvider });
     if (!response?.ok) log(response?.error || 'Could not open the provider.');
+    else if (config.provider === 'garmin') log('Garmin Marine opened. Click the map centre to place its marker.');
     else log(`${config.provider === 'cmap' ? 'C-MAP Pin Location' : 'i-Boating'} opened.`);
   });
   $('centerBoat').addEventListener('click', () => {

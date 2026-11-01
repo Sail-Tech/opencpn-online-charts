@@ -10,7 +10,7 @@ A native [OpenCPN](https://opencpn.org) plugin that draws free online marine dat
   - a Weather window with the conditions and the forecast model;
   - a forecast time bar on the chart covering the next 72 hours;
   - a 72-hour offline cache.
-- **Open provider** button that opens i-Boating or C-MAP in the web browser at the boat position.
+- **Open provider** button that opens i-Boating, C-MAP or Garmin Marine in the web browser at the boat position.
 - **Offline bathymetry cache** with prefetch of the visible area.
 - **Fast drawing**: about 5 ms per frame in OpenGL on a Retina Mac.
 
@@ -41,7 +41,7 @@ A native [OpenCPN](https://opencpn.org) plugin that draws free online marine dat
 4. Three buttons appear in the toolbar:
    - **Online Charts** shows or hides everything the plugin draws.
    - **Weather** shows or hides the Weather window.
-   - **Open provider** (red pin) opens i-Boating or C-MAP at the boat.
+   - **Open provider** (red pin) opens i-Boating, C-MAP or Garmin Marine at the boat.
 
 Packages are platform-specific. The plugin needs OpenCPN 5.8 or later (plugin API 1.18). It was developed and tested with OpenCPN 5.14.2.
 
@@ -112,7 +112,7 @@ The weather cache is in `online_charts_pi/weather_cache` below the OpenCPN user 
 
 ## Open provider at the boat position
 
-The **Open provider** toolbar button (red pin) opens a small menu: **Open i-Boating** or **Open C-MAP (Pin location)**. The choice opens in the default web browser at the boat position when OpenCPN has a live GPS fix, otherwise at the chart centre, and the menu says which. i-Boating opens at the chart's current zoom and depth units; C-MAP uses its *Pin location* route. This matches the browser dashboard's *Open provider at the boat position*. Following the boat live on those sites still needs the Chrome extension.
+The **Open provider** toolbar button (red pin) opens a small menu: **Open i-Boating**, **Open C-MAP (Pin location)** or **Open Garmin Marine**. The choice opens in the default web browser at the boat position when OpenCPN has a live GPS fix, otherwise at the chart centre, and the menu says which. i-Boating opens at the chart's current zoom and depth units; C-MAP uses its *Pin location* route. Garmin Marine opens its English page centred on the position, sent as a 12-character geohash in the `key` parameter (the same URL as the GPS Charts extension); its own marker is not placed automatically, so click the map centre to mark the boat. This matches the browser dashboard's *Open provider at the boat position*. Following the boat live on those sites still needs the Chrome extension.
 
 ## Auxiliary local dashboard
 
@@ -199,6 +199,7 @@ WXDEPS=/path/to/macos_deps_universal ARCHS="x86_64 arm64" ci/build-macos-local.s
 
 ```bash
 c++ -std=c++17 -Isrc tests/json_test.cpp src/online_charts_json.cpp -o json_test && ./json_test
+c++ -std=c++17 -Isrc tests/geohash_test.cpp -o geohash_test && ./geohash_test
 ```
 
 `tests/server_smoke.cpp` starts the auxiliary dashboard server and broadcasts a test position.
@@ -216,6 +217,7 @@ src/online_charts_weather_window.*  The floating Weather window
 src/online_charts_preferences.*   Preferences dialog (Chart, Weather, Offline cache and status)
 src/online_charts_http.*          Asynchronous HTTPS: wxWebRequest or libcurl
 src/online_charts_json.*          Minimal locale-independent JSON reader
+src/online_charts_geohash.h       Geohash and Garmin Marine URL for Open provider
 src/online_charts_server.*        Loopback server for the auxiliary dashboard (CivetWeb)
 data/                             Toolbar icons and the auxiliary browser dashboard
 ci/, cmake/, opencpn-libs/        Build scripts, OpenCPN plugin API and shared plugin libraries
