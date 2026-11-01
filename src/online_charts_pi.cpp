@@ -6,6 +6,7 @@
 #include "pidc.h"
 
 #include <wx/fileconf.h>
+#include <wx/filefn.h>
 #include <wx/filename.h>
 #include <wx/log.h>
 #include <wx/menu.h>
@@ -18,6 +19,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
+#include <vector>
 
 extern "C" DECL_EXP opencpn_plugin* create_pi(void* plugin_manager) {
   wxLogMessage("Online Charts: create_pi");
@@ -38,6 +40,44 @@ int MinorVersion() {
   const std::string version(API_VERSION);
   const auto dot = version.find('.');
   return dot == std::string::npos ? 0 : std::atoi(version.substr(dot + 1).c_str());
+}
+
+// Runs a program with separate arguments (no shell quoting). With `wait`, the
+// result is the program's exit code; otherwise 0 when it started.
+long Run(const std::vector<wxString>& args, bool wait) {
+  std::vector<const wchar_t*> argv;
+  for (const auto& arg : args) argv.push_back(arg.wc_str());
+  argv.push_back(nullptr);
+  if (wait) return wxExecute(argv.data(), wxEXEC_SYNC | wxEXEC_NOEVENTS);
+  return wxExecute(argv.data(), wxEXEC_ASYNC) > 0 ? 0 : -1;
+}
+
+// Opens a page in Google Chrome or Chromium, where the GPS Charts extension can
+// act on it (it places Garmin's marker). False when neither is installed.
+bool OpenInChrome(const wxString& url) {
+#if defined(__WXOSX__)
+  // `open -b` exits with an error when no application has that bundle id.
+  for (const char* bundle : {"com.google.Chrome", "org.chromium.Chromium"}) {
+    if (Run({"open", "-b", bundle, url}, true) == 0) return true;
+  }
+  return false;
+#elif defined(__WXMSW__)
+  for (const char* base : {"ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"}) {
+    wxString root;
+    if (!wxGetEnv(base, &root) || root.empty()) continue;
+    const wxString chrome = root + "\\Google\\Chrome\\Application\\chrome.exe";
+    if (wxFileName::FileExists(chrome) && Run({chrome, url}, false) == 0) return true;
+  }
+  return false;
+#else
+  wxPathList path;
+  path.AddEnvList("PATH");
+  for (const char* name : {"google-chrome", "google-chrome-stable", "chromium", "chromium-browser"}) {
+    const wxString program = path.FindAbsoluteValidPath(name);
+    if (!program.empty() && Run({program, url}, false) == 0) return true;
+  }
+  return false;
+#endif
 }
 
 wxString DataFile(const wxString& name) {
@@ -399,9 +439,14 @@ void OnlineChartsPi::OpenProviderMenu() {
     url = wxString::FromUTF8(("https://appchart.c-map.com/core/select/new_place/@" + Decimal(lon, 6) + "," +
                               Decimal(lat, 6)).c_str());
   } else if (choice == kGarmin) {
-    // Garmin centres its map on the geohash in `key`. Without the browser
-    // extension its own marker cannot be placed: click the map centre for it.
-    url = wxString::FromUTF8(online_charts::GarminMarineUrl(lat, lon).c_str());
+    // Garmin centres its map on the geohash in `key`; only a click on the map
+    // places its marker. In Chrome, the GPS Charts extension (0.7.1 or later)
+    // makes that click for pages carrying gpscharts=pin. Elsewhere, click the
+    // map centre.
+    const std::string garmin = online_charts::GarminMarineUrl(lat, lon);
+    if (garmin.empty()) return;
+    url = wxString::FromUTF8((garmin + "&gpscharts=pin").c_str());
+    if (OpenInChrome(url)) return;
   }
   if (!url.empty() && !wxLaunchDefaultBrowser(url)) {
     wxMessageBox("The web browser could not be opened.", "Open provider", wxOK | wxICON_WARNING);
