@@ -1,5 +1,9 @@
 # Build and validation status
 
+## Version 1.5.3 — Garbled characters on Windows
+
+With 1.5.2 the plugin enabled in OpenCPN 5.14.2 (32-bit Windows) without crashing, but the Weather window showed garbled characters. MSVC compiles without `/utf-8` in the Windows code page, so UTF-8 wide literals (`L"°"`, `L"—"`, `L" · "`) and the narrow `"M\u00e9t\u00e9o-France"` passed to `wxString::FromUTF8` were mis-encoded. The Windows build now uses `/utf-8`. Not yet checked: the 1.5.3 Weather window on Windows.
+
 ## Version 1.5.2 — Windows crash when enabling the plugin
 
 The 1.5.1 `msvc-wx32` package imported in OpenCPN 5.14.2 (32-bit, Windows 10 22H2), then OpenCPN crashed when the plugin was enabled. The crash dump shows an access violation reading address 0 in `msvcp140.dll` 14.12.25810 (OpenCPN's own copy), called from `_Mtx_lock` in the plugin (`online_charts_pi.dll+0x97d4`, `OnlineChartsServer`'s mutex). Visual Studio 2022 17.10 made the `std::mutex` constructor constexpr, which requires runtime 14.40 or later. The Windows build now defines `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR`.

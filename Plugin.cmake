@@ -4,7 +4,7 @@ set(OCPN_BETA_REPO "opencpn/online-charts-beta" CACHE STRING "Beta repository")
 set(OCPN_RELEASE_REPO "opencpn/online-charts-prod" CACHE STRING "Release repository")
 
 set(PKG_NAME online_charts_pi)
-set(PKG_VERSION 1.5.2)
+set(PKG_VERSION 1.5.3)
 set(PKG_PRERELEASE "")
 set(DISPLAY_NAME OnlineCharts)
 set(PLUGIN_API_NAME OnlineCharts)
@@ -55,6 +55,9 @@ macro(late_init)
     # that needs runtime 14.40 or later; with the older runtime the first lock
     # is an access violation inside msvcp140 (_Mtx_lock).
     target_compile_definitions(${PACKAGE_NAME} PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+    # Read the sources as UTF-8 (MSVC assumes the Windows code page) and keep
+    # narrow literals in UTF-8 for wxString::FromUTF8.
+    target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8)
   endif ()
   if (NOT WIN32)
     find_package(Threads REQUIRED)

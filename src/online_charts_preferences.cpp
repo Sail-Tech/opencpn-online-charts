@@ -196,13 +196,13 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
     }
     wxString text = rendering + "\n";
     text += wxString::Format(
-        "Viewport zoom: %d · Visible/ready tiles: %u/%u · Drawn: %u areas, %u contours, %u soundings\n",
+        L"Viewport zoom: %d · Visible/ready tiles: %u/%u · Drawn: %u areas, %u contours, %u soundings\n",
         status.zoom, static_cast<unsigned>(status.visible_tiles),
         static_cast<unsigned>(status.ready_tiles),
         static_cast<unsigned>(status.drawn_areas),
         static_cast<unsigned>(status.drawn_contours),
         static_cast<unsigned>(status.drawn_soundings));
-    text += wxString::Format("Base map tiles: %u · Seamark tiles: %u · Depth labels: %d px · Drawing: %.1f ms per frame\n",
+    text += wxString::Format(L"Base map tiles: %u · Seamark tiles: %u · Depth labels: %d px · Drawing: %.1f ms per frame\n",
                              static_cast<unsigned>(status.base_tiles),
                              static_cast<unsigned>(status.seamark_tiles),
                              status.depth_label_size, status.render_ms);
@@ -212,7 +212,7 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
         static_cast<unsigned>(status.queued_requests),
         static_cast<unsigned long long>(status.downloads_succeeded),
         static_cast<unsigned long long>(status.downloads_failed));
-    text += wxString::Format("Disk cache: %u tiles · %s",
+    text += wxString::Format(L"Disk cache: %u tiles · %s",
                              static_cast<unsigned>(status.disk_tiles),
                              CacheSize(status.disk_bytes));
     if (!status.last_error.empty()) text += "\nLast bathymetry issue: " + status.last_error;
