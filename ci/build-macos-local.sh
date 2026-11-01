@@ -101,5 +101,7 @@ if [ "${1:-}" = "--install" ]; then
   cp "$OUT/libonline_charts_pi.dylib" "$DEST/PlugIns/libonline_charts_pi.dylib.new"
   mv -f "$DEST/PlugIns/libonline_charts_pi.dylib.new" "$DEST/PlugIns/libonline_charts_pi.dylib"
   cp "$ROOT"/data/*.svg "$DEST/SharedSupport/plugins/online_charts_pi/data/"
+  # The auxiliary browser dashboard served by the plugin.
+  rsync -a "$ROOT/data/online_charts/" "$DEST/SharedSupport/plugins/online_charts_pi/data/online_charts/"
   echo "Installed into $DEST/PlugIns (start OpenCPN)"
 fi
