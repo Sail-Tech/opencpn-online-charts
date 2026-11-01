@@ -53,7 +53,7 @@ The plugin reads public MVT/PBF tiles from:
 
 It renders the `depare`, `contours` and `soundings` layers over the current OpenCPN viewport. New tiles are downloaded asynchronously and the canvas is refreshed when data becomes available. No protected C-MAP or i-Boating vector endpoint is accessed or bypassed.
 
-The native disk cache is stored below the OpenCPN user data directory in `online_charts_pi/vector_cache`. It uses configurable freshness and size limits, supports offline-only operation and can prefetch the visible area by additional zoom levels. The auxiliary browser dashboard has its own separately configurable cache.
+The native disk cache is stored below the OpenCPN user data directory in `online_charts_pi/vector_cache`. It uses configurable freshness and size limits, supports offline-only operation and can prefetch the visible area by additional zoom levels. A tile past its refresh age is still drawn until a newer one arrives. When the cache passes its size limit (or 20000 tiles) the oldest downloads are removed down to 90%, but never the tiles of the latest saved area. The auxiliary browser dashboard has its own separately configurable cache.
 
 ### Drawing order
 
@@ -71,7 +71,7 @@ Open **Options → Plugins → OnlineCharts → Preferences**. The native Englis
 - measured screen-rectangle collision avoidance shared by contour and sounding labels;
 - the **Weather** tab described below;
 - cache enable, network-first/cache-first/offline-only mode, maximum size and refresh age;
-- **Save visible area for offline use**, with 0–4 additional zoom levels and a 5000-tile safety limit;
+- **Save visible area for offline use**, with 0–4 additional zoom levels and a 5000-tile safety limit; it reports the estimated size and refuses an area that does not fit in the maximum cache size;
 - **Clear cache**, **Refresh status**, visible/ready tile counts, drawn-object counters, the overlay drawing time per frame and the latest network or OpenGL issue.
 
 Choices accepted with **OK** are written to the OpenCPN configuration under `/PlugIns/OnlineCharts` and restored on the next start. The toolbar state is also persistent. Base-chart selection and GPS input remain OpenCPN settings; browser-only provider and serial-port controls are not duplicated in this native dialog.

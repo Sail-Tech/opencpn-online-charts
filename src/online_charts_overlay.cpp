@@ -38,6 +38,11 @@ constexpr int kMinZoom = 4;
 constexpr int kMaxZoom = 15;
 constexpr int kMaxRequests = 8;
 constexpr int kMaxPrefetchTiles = 5000;
+// The disk cache holds several saved areas at the limit, plus browsing tiles.
+constexpr size_t kMaxDiskTiles = 4 * kMaxPrefetchTiles;
+constexpr unsigned kMaintainEveryWrites = 100;
+// Size assumed per tile when the cache is too small to measure an average.
+constexpr uint64_t kAssumedTileBytes = 32 * 1024;
 constexpr size_t kMaxMemoryTiles = 128;
 constexpr size_t kMaxTileBytes = 16 * 1024 * 1024;
 constexpr std::time_t kRetryDelay = 60;
@@ -650,7 +655,7 @@ void OnlineChartsOverlay::CompleteDownload(int id, bool transport_ok, long http_
             (bytes.empty() || file.Write(bytes.data(), bytes.size()) == bytes.size())) {
           file.Close();
           cache_written = wxRenameFile(temporary, path, true);
-          if (cache_written && ++disk_writes_ % 25 == 0) MaintainDiskCache();
+          if (cache_written && ++disk_writes_ % kMaintainEveryWrites == 0) MaintainDiskCache();
         }
         if (!cache_written) wxRemoveFile(temporary);
       }
@@ -1310,17 +1315,9 @@ OnlineChartsStatus OnlineChartsOverlay::Status() {
       (seamarks_ ? seamarks_->QueuedRequests() : 0);
   status_.last_error = last_error_;
   status_.base_error = base_map_ ? base_map_->LastError() : wxString();
-  status_.disk_tiles = 0;
-  status_.disk_bytes = 0;
-  if (wxDirExists(cache_dir_)) {
-    wxArrayString files;
-    wxDir::GetAllFiles(cache_dir_, &files, "*.pbf", wxDIR_FILES);
-    status_.disk_tiles = files.size();
-    for (const auto& path : files) {
-      const wxULongLong size = wxFileName(path).GetSize();
-      if (size != wxInvalidSize) status_.disk_bytes += size.GetValue();
-    }
-  }
+  size_t disk_tiles = 0;
+  DiskUsage(&status_.disk_bytes, &disk_tiles);
+  status_.disk_tiles = disk_tiles;
   return status_;
 }
 
@@ -1331,6 +1328,7 @@ wxString OnlineChartsOverlay::ClearCache() {
   cache_.clear();
   failed_tiles_.clear();
   disk_missing_.clear();
+  saved_area_.clear();
   size_t removed = 0;
   if (wxDirExists(cache_dir_)) {
     wxArrayString files;
@@ -1359,22 +1357,59 @@ wxString OnlineChartsOverlay::SaveVisibleArea() {
   if (first_zoom < 0) return "The current chart viewport is not valid.";
   first_zoom = std::max(kMinZoom, first_zoom);
   const int last_zoom = std::min(kMaxZoom, first_zoom + settings_.prefetch_levels);
-  const size_t before = download_queue_.size() + requests_.size();
-  size_t planned = 0;
+  std::vector<TileKey> planned;
   for (int zoom = first_zoom; zoom <= last_zoom; ++zoom) {
     const auto keys = VisibleTiles(last_viewport_.get(), zoom, kMaxPrefetchTiles);
-    if (planned + keys.size() > kMaxPrefetchTiles) {
-      return "More than 5000 tiles. Zoom in or reduce Extra zoom levels.";
+    if (planned.size() + keys.size() > static_cast<size_t>(kMaxPrefetchTiles)) {
+      return wxString::Format("More than %d tiles. Zoom in or reduce Extra zoom levels.",
+                              kMaxPrefetchTiles);
     }
-    planned += keys.size();
-    QueueDownloads(keys);
+    planned.insert(planned.end(), keys.begin(), keys.end());
   }
+
+  // The saved area must fit below the trimming target, or the cache would
+  // delete part of it while the rest downloads.
+  uint64_t disk_bytes = 0;
+  size_t disk_files = 0;
+  DiskUsage(&disk_bytes, &disk_files);
+  const uint64_t tile_bytes = disk_files >= 20 ? disk_bytes / disk_files : kAssumedTileBytes;
+  const uint64_t needed = tile_bytes * planned.size();
+  const uint64_t target = static_cast<uint64_t>(settings_.cache_max_mb) * 1024 * 1024 * 9 / 10;
+  if (needed > target) {
+    return wxString::Format(
+        "This area needs about %u MB, more than the %d MB cache allows. "
+        "Raise Maximum cache size, zoom in or reduce Extra zoom levels.",
+        static_cast<unsigned>(needed / (1024 * 1024) + 1), settings_.cache_max_mb);
+  }
+
+  // Tiles of the latest saved area are never trimmed, including fresh ones
+  // that are skipped below and keep their older file times.
+  saved_area_.clear();
+  for (const auto& key : planned) saved_area_.insert(CacheFile(key).ToStdString());
+
+  const size_t before = download_queue_.size() + requests_.size();
+  QueueDownloads(planned);
   const size_t added = download_queue_.size() + requests_.size() >= before
                            ? download_queue_.size() + requests_.size() - before
                            : 0;
   return wxString::Format(
-      "Save visible area: %u tiles planned; %u active or queued. Fresh cached tiles are skipped.",
-      static_cast<unsigned>(planned), static_cast<unsigned>(added));
+      "Save visible area: %u tiles planned (about %u MB); %u active or queued. "
+      "Fresh cached tiles are skipped.",
+      static_cast<unsigned>(planned.size()),
+      static_cast<unsigned>(needed / (1024 * 1024) + 1), static_cast<unsigned>(added));
+}
+
+void OnlineChartsOverlay::DiskUsage(uint64_t* bytes, size_t* files) const {
+  *bytes = 0;
+  *files = 0;
+  if (cache_dir_.empty() || !wxDirExists(cache_dir_)) return;
+  wxArrayString paths;
+  wxDir::GetAllFiles(cache_dir_, &paths, "*.pbf", wxDIR_FILES);
+  *files = paths.size();
+  for (const auto& path : paths) {
+    const wxULongLong size = wxFileName(path).GetSize();
+    if (size != wxInvalidSize) *bytes += size.GetValue();
+  }
 }
 
 void OnlineChartsOverlay::MaintainDiskCache() {
@@ -1401,9 +1436,13 @@ void OnlineChartsOverlay::MaintainDiskCache() {
   const wxULongLong limit(configured);
   const wxULongLong target(configured * 9 / 10);
   size_t remaining = disk_files.size();
+  if (total <= limit && remaining <= kMaxDiskTiles) return;
+  // Once over a limit, trim the oldest downloads to 90% so the next writes do
+  // not trigger another pass straight away.
+  const size_t target_files = kMaxDiskTiles * 9 / 10;
   for (const auto& file : disk_files) {
-    if (total <= limit && remaining <= 4096) break;
-    if (total <= target && remaining <= 4096) break;
+    if (total <= target && remaining <= target_files) break;
+    if (saved_area_.count(file.path.ToStdString())) continue;
     if (wxRemoveFile(file.path)) {
       total -= file.size;
       --remaining;

@@ -2,6 +2,10 @@
 
 Release history of the OpenCPN Online Charts plugin, newest first. Build and validation notes for each release are in [BUILD_STATUS.md](BUILD_STATUS.md).
 
+## Unreleased
+
+**Offline cache.** The disk cache kept at most 4096 tiles, while **Save visible area for offline use** can save up to 5000, so a large saved area lost its oldest tiles as soon as the cache was trimmed. The cache now holds up to 20000 tiles, the tiles of the latest saved area are never trimmed, and a pass that starts trimming goes down to 90% of the limits instead of stopping just below them. Saving an area now reports its estimated size and refuses an area larger than the maximum cache size allows.
+
 ## 1.4.0 — Drawing speed, dashboard-sized labels and weather
 
 **Drawing speed.** On a Retina Mac (2660 × 1446 canvas, 40 tiles) version 1.3.5 needed about **6 seconds per chart redraw**, which made panning and zooming unusable. Version 1.4.0 draws the same view in about **5 ms**. The causes and fixes:

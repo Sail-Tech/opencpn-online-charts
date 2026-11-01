@@ -176,6 +176,7 @@ class OnlineChartsOverlay : public wxEvtHandler {
                       size_t drawn_soundings);
   void TrimMemoryCache();
   void MaintainDiskCache();
+  void DiskUsage(uint64_t* bytes, size_t* files) const;
   wxString CacheFile(const TileKey& key) const;
   std::time_t TileLifetime() const;
 
@@ -194,6 +195,7 @@ class OnlineChartsOverlay : public wxEvtHandler {
   std::unordered_map<std::string, int> pending_tiles_;
   std::unordered_map<std::string, std::time_t> failed_tiles_;
   std::unordered_map<std::string, std::time_t> disk_missing_;  // Avoids a disk lookup per frame.
+  std::unordered_set<std::string> saved_area_;  // Cache files of the latest saved area.
   std::deque<TileKey> download_queue_;
   std::unordered_set<std::string> queued_tiles_;
   std::unique_ptr<PlugIn_ViewPort> last_viewport_;
