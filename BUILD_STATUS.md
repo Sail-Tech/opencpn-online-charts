@@ -1,5 +1,9 @@
 # Build and validation status
 
+## Version 1.5.0 — Garmin Marine and offline-area cache
+
+Built with `ci/build-macos-local.sh` and installed in OpenCPN 5.14.2 on an Intel Mac: the plugin loads and draws as before. The GitHub Actions build passes on macOS (universal), Debian 12 and Windows (VS 2022). Checked: the Garmin URL and geohash (`tests/geohash_test.cpp`, same reference values as the GPS Charts extension), the bundled dashboard's Garmin choice in a browser, and the GPS Charts extension placing and checking Garmin's marker on the live Garmin page. Not yet checked: the **Open Garmin Marine** menu item clicked inside OpenCPN (no synthetic clicks from this session), the Chrome lookup on Windows and Linux, and a full **Save visible area** of several thousand tiles against the new cache limits.
+
 ## Version 1.4.0 — drawing speed, dashboard-sized labels and weather
 
 Measured in OpenCPN 5.14.2 on an Intel Retina Mac with the same coastal test view (2660 × 1446 canvas, OpenStreetMap base map), using a benchmark build that redraws the chart 300 times: version 1.3.5 needed about 6 s per redraw (40 vector tiles, 738 contours); 1.4.0 averages 4–5 ms (6 vector tiles, 91 contours, 109 soundings). See the README for the causes and fixes.

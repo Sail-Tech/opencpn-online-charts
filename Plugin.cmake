@@ -4,7 +4,7 @@ set(OCPN_BETA_REPO "opencpn/online-charts-beta" CACHE STRING "Beta repository")
 set(OCPN_RELEASE_REPO "opencpn/online-charts-prod" CACHE STRING "Release repository")
 
 set(PKG_NAME online_charts_pi)
-set(PKG_VERSION 1.4.0)
+set(PKG_VERSION 1.5.0)
 set(PKG_PRERELEASE "")
 set(DISPLAY_NAME OnlineCharts)
 set(PLUGIN_API_NAME OnlineCharts)
