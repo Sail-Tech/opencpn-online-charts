@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -43,8 +44,9 @@ int MinorVersion() {
 }
 
 // Runs a program with separate arguments (no shell quoting). With `wait`, the
-// result is the program's exit code; otherwise 0 when it started.
-long Run(const std::vector<wxString>& args, bool wait) {
+// result is the program's exit code; otherwise 0 when it started. Takes an
+// initializer list: MSVC cannot link std::vector<wxString> against wxWidgets.
+long Run(std::initializer_list<wxString> args, bool wait) {
   std::vector<const wchar_t*> argv;
   for (const auto& arg : args) argv.push_back(arg.wc_str());
   argv.push_back(nullptr);
