@@ -1,5 +1,9 @@
 # Build and validation status
 
+## Version 1.5.1 — Package for the 32-bit Windows OpenCPN
+
+The Windows CI job now builds two packages: `msvc-wx32` (Win32, wxWidgets 3.2.6) and `msvc-64` (x64, wxWidgets 3.3.4). OpenCPN's `PluginHandler::IsCompatible` accepts an `msvc*` package only when its target equals the host's own target: `msvc-wx32` for 32-bit builds (all of 5.8–5.14.0), `msvc-64` for 64-bit builds (5.14.2 and later; 5.14.0 had no 64-bit Windows build). Not yet checked: either Windows package imported and run in OpenCPN on Windows.
+
 ## Version 1.5.0 — Garmin Marine and offline-area cache
 
 Built with `ci/build-macos-local.sh` and installed in OpenCPN 5.14.2 on an Intel Mac: the plugin loads and draws as before. The GitHub Actions build passes on macOS (universal), Debian 12 and Windows (VS 2022). Checked: the Garmin URL and geohash (`tests/geohash_test.cpp`, same reference values as the GPS Charts extension), the bundled dashboard's Garmin choice in a browser, and the GPS Charts extension placing and checking Garmin's marker on the live Garmin page. Not yet checked: the **Open Garmin Marine** menu item clicked inside OpenCPN (no synthetic clicks from this session), the Chrome lookup on Windows and Linux, and a full **Save visible area** of several thousand tiles against the new cache limits.
@@ -150,9 +154,9 @@ OpenCPN was then restarted with network isolation. The same bathymetry rendered 
 
 That graphical test used the wxDC path with `OpenGL=0`. OpenGL drawing code compiled, but visual OpenGL output was not validated. The new 1.2.0 diagnostic changes have not replaced that earlier visual test with a new Debian runtime test.
 
-## Windows x86-64
+## Windows
 
-A native build job is configured in `.github/workflows/build.yml`, but no Windows binary was built or tested in this environment. No Windows import tarball is represented as complete. Platform tarballs are not interchangeable.
+GitHub Actions builds a 32-bit (`msvc-wx32`, x86) and a 64-bit (`msvc-64`, x86_64) package with Visual Studio 2022 (`.github/workflows/build.yml`, `ci/build-windows.bat` with `PLATFORM=Win32` or `x64`). Neither has been run in OpenCPN on Windows from this environment. Platform tarballs are not interchangeable, and the Windows package must match OpenCPN's own architecture, not Windows'.
 
 ## Runtime and safety limitations
 

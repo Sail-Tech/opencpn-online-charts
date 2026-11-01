@@ -46,7 +46,7 @@ double TileLatitude(int y, int zoom) {
 
 OnlineChartsLandLayer::OnlineChartsLandLayer()
     : http_(std::make_unique<OnlineChartsHttp>(
-          "OnlineCharts-OpenCPN/1.5.0 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {}
+          "OnlineCharts-OpenCPN/1.5.1 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {}
 
 OnlineChartsLandLayer::~OnlineChartsLandLayer() { Shutdown(); }
 

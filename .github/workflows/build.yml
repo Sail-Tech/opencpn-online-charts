@@ -30,9 +30,20 @@ jobs:
             build/*.xml
             build/*.sha256
 
-  windows-x86_64:
-    # build-windows.bat uses the Visual Studio 2022 generator.
+  windows:
+    # build-windows.bat uses the Visual Studio 2022 generator. x64 is for the
+    # 64-bit OpenCPN 5.14+, Win32 for the 32-bit OpenCPN 5.8-5.12.
     runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x64
+            name: x86_64
+          - platform: Win32
+            name: x86
+    env:
+      PLATFORM: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
       - name: Build import tarball
@@ -40,7 +51,7 @@ jobs:
         run: ci\build-windows.bat
       - uses: actions/upload-artifact@v4
         with:
-          name: OnlineCharts-Windows-x86_64
+          name: OnlineCharts-Windows-${{ matrix.name }}
           path: |
             build/*.tar.gz
             build/*.xml

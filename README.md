@@ -35,7 +35,10 @@ A native [OpenCPN](https://opencpn.org) plugin that draws free online marine dat
 1. Download the package for your system from the [Releases](../../releases) page:
    - **macOS 11 or later**, universal (Intel and Apple Silicon): `OnlineCharts-…-darwin-wx32-10-universal.tar.gz`.
    - **Debian 12 / Ubuntu-based Linux**, x86-64: `OnlineCharts-…-debian-x86_64-12-x86_64.tar.gz`.
-   - **Windows 10/11**, 64-bit: `OnlineCharts-…-msvc-64-10-x86_64.tar.gz`.
+   - **Windows 10/11** with a 32-bit OpenCPN (every Windows OpenCPN from 5.8 to 5.14.0): `OnlineCharts-…-msvc-wx32-10-x86.tar.gz`.
+   - **Windows 10/11** with a 64-bit OpenCPN (5.14.2 or later): `OnlineCharts-…-msvc-64-10-x86_64.tar.gz`.
+
+   On Windows the package must match OpenCPN, not Windows: a 64-bit Windows can run a 32-bit OpenCPN. OpenCPN is 32-bit when it is installed in `C:\Program Files (x86)\OpenCPN`, or when Task Manager's *Processes* tab shows it as `OpenCPN (32 bit)`. The wrong package is refused with *Incompatible import plugin detected*.
 2. In OpenCPN open **Options → Plugins**, choose **Import plugin…** and select the downloaded `.tar.gz`. Do not unpack or rename it.
 3. Enable **OnlineCharts** in the plugin list and restart OpenCPN if asked.
 4. Three buttons appear in the toolbar:
@@ -168,7 +171,12 @@ From a *Developer Command Prompt for VS 2022*, in the repository folder:
 ci\build-windows.bat
 ```
 
-The script downloads the wxWidgets build dependencies through the ShipDriver helpers and builds the import tarball.
+The script downloads the wxWidgets build dependencies through the ShipDriver helpers and builds the import tarball for the 64-bit OpenCPN (`msvc-64`). For the 32-bit OpenCPN (`msvc-wx32`), in a fresh clone or after deleting the `build` folder:
+
+```bat
+set PLATFORM=Win32
+ci\build-windows.bat
+```
 
 ### macOS 11 or later (universal)
 

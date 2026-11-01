@@ -2,6 +2,10 @@
 
 Release history of the OpenCPN Online Charts plugin, newest first. Build and validation notes for each release are in [BUILD_STATUS.md](BUILD_STATUS.md).
 
+## 1.5.1 — Package for the 32-bit Windows OpenCPN
+
+**Windows.** Version 1.5.0 had only a 64-bit Windows package (`msvc-64`). A 32-bit OpenCPN (`msvc-wx32`: every Windows OpenCPN from 5.8 to 5.14.0, and 32-bit installs of later versions) refused it with *Incompatible import plugin detected*. Each release now has both packages: `msvc-wx32-10-x86` for the 32-bit OpenCPN and `msvc-64-10-x86_64` for the 64-bit one. The 64-bit package's metadata now says `x86_64` instead of `x86`. No other changes.
+
 ## 1.5.0 — Garmin Marine and offline-area cache
 
 **Garmin Marine.** **Open provider** has a third choice, **Open Garmin Marine**, which opens Garmin's English Marine page centred on the boat (or the chart centre without a GPS fix), as a 12-character geohash in the `key` parameter, the same URL as the GPS Charts extension 0.7.0. Only a click on Garmin's map places its marker, so the plugin opens Garmin in Google Chrome or Chromium when installed, with `gpscharts=pin` added, and the GPS Charts extension 0.7.1 or later places and checks the marker there. Without Chrome or the extension Garmin opens in the default browser and you click the map centre. The bundled browser dashboard lists Garmin too; it never opens Garmin at its demonstration position and does not reload Garmin to follow the boat, which would remove the marker. New `tests/geohash_test.cpp`.
