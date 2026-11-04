@@ -106,9 +106,9 @@ OnlineChartsQuickPanel::OnlineChartsQuickPanel(wxWindow* parent, const OnlineCha
   main->Add(ais_, 0, wxLEFT | wxRIGHT | wxTOP, kPad);
   ais_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { Apply(); });
   ais_status_ = new wxStaticText(panel_, wxID_ANY, wxEmptyString);
-  wxFont small = ais_status_->GetFont();
-  small.SetPointSize(std::max(8, small.GetPointSize() - 1));
-  ais_status_->SetFont(small);
+  wxFont small_font = ais_status_->GetFont();
+  small_font.SetPointSize(std::max(8, small_font.GetPointSize() - 1));
+  ais_status_->SetFont(small_font);
   main->Add(ais_status_, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, kPad);
 
   main->Add(new wxStaticLine(panel_), 0, wxALL | wxEXPAND, kPad);
