@@ -196,17 +196,17 @@ void OnlineChartsAis::OnDone(bool ok, long status) {
   Schedule(delay);
 }
 
-std::vector<wxString> OnlineChartsAis::Credits() const {
-  std::vector<wxString> lines;
+std::vector<std::string> OnlineChartsAis::Credits() const {
+  std::vector<std::string> lines;
   if (!enabled_) return lines;
-  wxString line = "AIS demo (not for navigation): ";
+  std::string line = "AIS demo (not for navigation): ";
   if (credits_.empty()) {
     line += "Open Waters AIS (https://openwaters.io/ais/)";
   } else {
     bool first = true;
     for (const auto& credit : credits_) {
-      if (!first) line += L" · ";
-      line += wxString::FromUTF8(credit.c_str());
+      if (!first) line += " \xc2\xb7 ";  // A middle dot, in UTF-8.
+      line += credit;
       first = false;
     }
   }

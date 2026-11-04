@@ -2,6 +2,7 @@
 #define ONLINE_CHARTS_QUICK_PANEL_H_
 
 #include <functional>
+#include <string>
 #include <vector>
 
 #include <wx/colour.h>
@@ -54,7 +55,7 @@ class OnlineChartsQuickPanel : public wxFrame {
   };
 
   // on_select runs when a segment is chosen; without it the settings are applied.
-  Segments AddSegments(wxWindow* parent, wxSizer* row, const std::vector<wxString>& labels,
+  Segments AddSegments(wxWindow* parent, wxSizer* row, const std::vector<std::string>& labels,
                        std::function<void(int)> on_select = nullptr, int width = 64);
   wxSlider* AddSlider(wxWindow* parent, wxSizer* sizer, const wxString& label, wxStaticText** value);
   void Apply();

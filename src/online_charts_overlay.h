@@ -98,7 +98,8 @@ class OnlineChartsOverlay : public wxEvtHandler {
   void Configure(const OnlineChartsSettings& settings);
   const OnlineChartsSettings& Settings() const { return settings_; }
   // Extra attribution lines drawn with the chart credits (the AIS demo's sources).
-  void SetExtraCredits(const std::vector<wxString>& lines) { extra_credits_ = lines; }
+  // UTF-8 lines (MSVC cannot link std::vector<wxString> against wxWidgets).
+  void SetExtraCredits(const std::vector<std::string>& lines) { extra_credits_ = lines; }
   void Shutdown();
   bool Render(wxDC& dc, PlugIn_ViewPort* viewport);
   bool Render(wxGLContext* context, PlugIn_ViewPort* viewport);
@@ -204,7 +205,7 @@ class OnlineChartsOverlay : public wxEvtHandler {
   std::unique_ptr<OnlineChartsLandLayer> seamarks_;  // OpenSeaMap, drawn above the bathymetry.
   std::unique_ptr<OnlineChartsLandLayer> depth_;     // Depth colours from the Open Waters raster.
   OnlineChartsSettings settings_;
-  std::vector<wxString> extra_credits_;
+  std::vector<std::string> extra_credits_;
   wxString cache_dir_;
   std::unordered_map<std::string, CacheEntry> cache_;
   std::map<int, PendingRequest> requests_;  // Stable storage for libcurl callbacks.

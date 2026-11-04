@@ -193,11 +193,11 @@ OnlineChartsQuickPanel::~OnlineChartsQuickPanel() {
 }
 
 OnlineChartsQuickPanel::Segments OnlineChartsQuickPanel::AddSegments(
-    wxWindow* parent, wxSizer* row, const std::vector<wxString>& labels,
+    wxWindow* parent, wxSizer* row, const std::vector<std::string>& labels,
     std::function<void(int)> on_select, int width) {
   Segments segments;
   for (size_t i = 0; i < labels.size(); ++i) {
-    auto* button = new wxToggleButton(parent, wxID_ANY, labels[i], wxDefaultPosition,
+    auto* button = new wxToggleButton(parent, wxID_ANY, wxString::FromUTF8(labels[i].c_str()), wxDefaultPosition,
                                       wxSize(width, kControlHeight));
     segments.buttons.push_back(button);
     row->Add(button, 0, wxALIGN_CENTER_VERTICAL);

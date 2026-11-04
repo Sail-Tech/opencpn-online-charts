@@ -1348,7 +1348,9 @@ void OnlineChartsOverlay::DrawStatus(piDC* dc, PlugIn_ViewPort* viewport, const 
                            : wxString("Base map: Esri, Garmin, GEBCO, NOAA NGDC, and other contributors"),
                        wxColour(80, 95, 100));
   }
-  for (const auto& credit : extra_credits_) lines.emplace_back(credit, wxColour(80, 95, 100));
+  for (const auto& credit : extra_credits_) {
+    lines.emplace_back(wxString::FromUTF8(credit.c_str()), wxColour(80, 95, 100));
+  }
   // Keep clear of OpenCPN's own scale bar in the bottom-left corner.
   const float x = static_cast<float>(8 * pixel_scale_);
   float y = static_cast<float>(viewport->pix_height) - static_cast<float>(40 * pixel_scale_);

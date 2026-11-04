@@ -36,7 +36,8 @@ class OnlineChartsAis : public wxEvtHandler {
   void Shutdown();
 
   // Attribution of the sources heard so far, for the chart.
-  std::vector<wxString> Credits() const;
+  // UTF-8 text: MSVC cannot link std::vector<wxString> against wxWidgets.
+  std::vector<std::string> Credits() const;
   wxString StatusText() const;
 
  private:
