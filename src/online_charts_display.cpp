@@ -9,6 +9,9 @@
 #include <wx/dcgraph.h>
 #include <wx/dcmemory.h>
 
+// ocpn_plugin.h first: through wxWidgets it brings in windows.h, which the
+// OpenGL header in pidc.h needs on Windows (WINGDIAPI, APIENTRY).
+#include "ocpn_plugin.h"
 #include "online_charts_render.h"
 #include "pidc.h"
 
