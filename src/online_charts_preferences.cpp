@@ -56,7 +56,8 @@ wxString ForecastHourLabel(int hours) {
 bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* settings,
                                  OnlineChartsOverlay* overlay,
                                  OnlineChartsWeatherSettings* weather_settings,
-                                 OnlineChartsWeather* weather) {
+                                 OnlineChartsWeather* weather,
+                                 const std::function<wxString()>& ais_status) {
   if (!settings || !overlay || !weather_settings || !weather) return false;
   wxDialog dialog(parent, wxID_ANY, "Online Charts preferences", wxDefaultPosition,
                   wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
@@ -74,8 +75,11 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
   auto* enabled = AddCheck(layers, layers_box, "Enable online bathymetry overlay",
                            settings->overlay_enabled);
   auto* base_map = AddCheck(layers, layers_box,
-                            "Show a public raster base map below the bathymetry",
+                            "Show a public raster base map (drawn over your OpenCPN charts)",
                             settings->show_base_map);
+  base_map->SetToolTip(
+      "OpenCPN draws plug-ins above its charts, so the base map covers them, o-charts included. "
+      "Use it where you have no charts, or lower its opacity.");
   auto* base_map_row = new wxBoxSizer(wxHORIZONTAL);
   base_map_row->Add(new wxStaticText(layers, wxID_ANY, "Base map source"), 0,
                     wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
@@ -84,6 +88,12 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
   base_map_provider->Append("Esri World Ocean Base");
   base_map_provider->SetSelection(settings->base_map_provider == 1 ? 1 : 0);
   base_map_row->Add(base_map_provider, 1, wxEXPAND);
+  base_map_row->Add(new wxStaticText(layers, wxID_ANY, "Opacity (%)"), 0,
+                    wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12);
+  auto* base_map_opacity = new wxSpinCtrl(layers, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                          wxDefaultSize, wxSP_ARROW_KEYS, 10, 100,
+                                          settings->base_map_opacity);
+  base_map_row->Add(base_map_opacity, 0, wxALIGN_CENTER_VERTICAL);
   layers_box->Add(base_map_row, 0, wxALL | wxEXPAND, 6);
   auto* seamarks = AddCheck(layers, layers_box,
                             "Show OpenSeaMap seamarks (buoys, lights, beacons, areas)",
@@ -94,6 +104,24 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
                              settings->show_soundings);
   auto* shading = AddCheck(layers, layers_box, "Show depth colours and shading",
                            settings->show_shading);
+  auto* colours_row = new wxBoxSizer(wxHORIZONTAL);
+  colours_row->Add(new wxStaticText(layers, wxID_ANY, "Depth colours"), 0,
+                   wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
+  auto* depth_colours = new wxChoice(layers, wxID_ANY);
+  depth_colours->Append("Chart (light blues)");
+  depth_colours->Append("Topo (a colour per depth band)");
+  depth_colours->SetSelection(settings->depth_colours == 1 ? 1 : 0);
+  depth_colours->SetToolTip(
+      "Topo, as on Open Waters' chart view: red in the shallows through orange, yellow and "
+      "green to deep blue, so banks and channels stand out. Drying areas are pink.");
+  colours_row->Add(depth_colours, 1, wxEXPAND);
+  colours_row->Add(new wxStaticText(layers, wxID_ANY, "Opacity (%)"), 0,
+                   wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 12);
+  auto* depth_opacity = new wxSpinCtrl(layers, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                       wxDefaultSize, wxSP_ARROW_KEYS, 10, 100,
+                                       settings->depth_opacity);
+  colours_row->Add(depth_opacity, 0, wxALIGN_CENTER_VERTICAL);
+  layers_box->Add(colours_row, 0, wxALL | wxEXPAND, 6);
   auto* chart_status = AddCheck(layers, layers_box, "Show status and attribution on the chart",
                                 settings->show_status);
 
@@ -122,10 +150,27 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
       layers, wxID_ANY,
       "Source: Open Waters Seascape (public vector tiles, zoom 4-15).\n"
       "European coverage is commonly EMODnet (~115 m native resolution).\n"
-      "Base maps are network-only, visible-area raster tiles with bounded memory cache.\n"
+      "Base maps are network-only, visible-area raster tiles with bounded memory cache,\n"
+      "drawn over the OpenCPN charts.\n"
       "This is not C-MAP HRB, Genesis or i-Boating sonar contour data.");
   layers_box->Add(source_note, 0, wxALL | wxEXPAND, 6);
   chart_sizer->Add(layers_box, 0, wxALL | wxEXPAND, 8);
+
+  auto* ais_box = new wxStaticBoxSizer(wxVERTICAL, chart_page, "AIS demo");
+  auto* ais_parent = ais_box->GetStaticBox();
+  auto* ais_demo = AddCheck(ais_parent, ais_box,
+                            "Show live vessels from Open Waters AIS in the chart view "
+                            "(testing only, not for navigation)",
+                            settings->ais_demo);
+  auto* ais_note = new wxStaticText(
+      ais_parent, wxID_ANY,
+      "The vessels appear as OpenCPN AIS targets, received over the internet from shore\n"
+      "stations and AISHub, up to a minute late. Not a replacement for an AIS receiver.\n"
+      "If OpenCPN forwards NMEA to other devices, they get these targets too.");
+  ais_box->Add(ais_note, 0, wxALL | wxEXPAND, 6);
+  auto* ais_state = new wxStaticText(ais_parent, wxID_ANY, ais_status ? ais_status() : wxString());
+  ais_box->Add(ais_state, 0, wxALL | wxEXPAND, 6);
+  chart_sizer->Add(ais_box, 0, wxALL | wxEXPAND, 8);
 
   auto* cache_box = new wxStaticBoxSizer(wxVERTICAL, cache_page, "Offline bathymetry cache");
   auto* cache = cache_box->GetStaticBox();
@@ -202,8 +247,9 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
         static_cast<unsigned>(status.drawn_areas),
         static_cast<unsigned>(status.drawn_contours),
         static_cast<unsigned>(status.drawn_soundings));
-    text += wxString::Format(L"Base map tiles: %u · Seamark tiles: %u · Depth labels: %d px · Drawing: %.1f ms per frame\n",
+    text += wxString::Format(L"Base map tiles: %u · Depth colour tiles: %u · Seamark tiles: %u · Depth labels: %d px · Drawing: %.1f ms per frame\n",
                              static_cast<unsigned>(status.base_tiles),
+                             static_cast<unsigned>(status.depth_tiles),
                              static_cast<unsigned>(status.seamark_tiles),
                              status.depth_label_size, status.render_ms);
     text += wxString::Format(
@@ -357,7 +403,10 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
     wxMessageBox(result, "Online Charts", wxOK | wxICON_INFORMATION, &dialog);
   });
   wxTimer status_timer(&dialog);
-  dialog.Bind(wxEVT_TIMER, [&](wxTimerEvent&) { weather_status->SetLabel(weather->StatusText()); });
+  dialog.Bind(wxEVT_TIMER, [&](wxTimerEvent&) {
+    weather_status->SetLabel(weather->StatusText());
+    if (ais_status) ais_state->SetLabel(ais_status());
+  });
   status_timer.Start(2000);
 
   chart_page->SetSizer(chart_sizer);
@@ -400,6 +449,10 @@ bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* setting
   settings->show_base_map = base_map->GetValue();
   settings->show_seamarks = seamarks->GetValue();
   settings->base_map_provider = base_map_provider->GetSelection() == 1 ? 1 : 0;
+  settings->base_map_opacity = base_map_opacity->GetValue();
+  settings->depth_colours = depth_colours->GetSelection() == 1 ? 1 : 0;
+  settings->depth_opacity = depth_opacity->GetValue();
+  settings->ais_demo = ais_demo->GetValue();
   settings->depth_feet = units->GetSelection() == 1;
   settings->label_scale = depth_label_size->GetValue();
   settings->cache_enabled = cache_enabled->GetValue();

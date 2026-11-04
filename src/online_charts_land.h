@@ -21,14 +21,19 @@ class OnlineChartsHttp;
 class PlugIn_ViewPort;
 class piDC;
 
-// Network-only public raster base map. It deliberately has no disk cache or
+// Network-only public raster layers: the base map (0 OpenStreetMap, 1 Esri
+// World Ocean Base), OpenSeaMap seamarks (2) and the depth colours (3), from
+// the Open Waters elevation raster. They deliberately have no disk cache or
 // prefetcher; only visible tiles are requested and retained in bounded memory.
 class OnlineChartsLandLayer : public wxEvtHandler {
  public:
   OnlineChartsLandLayer();
   ~OnlineChartsLandLayer() override;
 
-  void Configure(bool enabled, int provider, bool allow_network);
+  // opacity is a percentage; the base map below 100 lets the OpenCPN chart show through.
+  void Configure(bool enabled, int provider, bool allow_network, int opacity);
+  // Depth colours only: Chart (0) or Topo (1). A change reloads the tiles.
+  void SetDepthColours(int scheme);
   void Shutdown();
   // Draws the visible tiles. dc is null for the OpenGL canvas, where tiles are
   // uploaded once as textures; pixel_scale is canvas pixels per logical pixel.
@@ -55,6 +60,8 @@ class OnlineChartsLandLayer : public wxEvtHandler {
 
   int ZoomForViewport(PlugIn_ViewPort* viewport) const;
   std::vector<TileKey> VisibleTiles(PlugIn_ViewPort* viewport) const;
+  // Replaces tiles known to be missing by their nearest ancestor that may exist.
+  std::vector<TileKey> AvailableTiles(const std::vector<TileKey>& keys) const;
   void QueueDownloads(const std::vector<TileKey>& keys);
   void StartQueuedDownloads();
   void StartDownload(const TileKey& key);
@@ -75,6 +82,11 @@ class OnlineChartsLandLayer : public wxEvtHandler {
   wxString last_error_;
   uint64_t use_counter_ = 0;
   int provider_ = 0;
+  unsigned char alpha_ = 255;
+  int depth_colours_ = 0;
+  // Esri World Ocean Base tiles that do not exist (HTTP 404): detailed tiles
+  // are regional, so their parent is drawn magnified instead.
+  std::unordered_set<std::string> missing_tiles_;
   bool enabled_ = true;
   bool allow_network_ = true;
   bool shutdown_ = false;

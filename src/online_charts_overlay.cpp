@@ -1,5 +1,6 @@
 #include "online_charts_overlay.h"
 
+#include "online_charts_depth.h"
 #include "online_charts_land.h"
 
 #include <algorithm>
@@ -64,15 +65,50 @@ double MercatorY(double latitude, int zoom) {
   return (1.0 - std::asinh(std::tan(radians)) / kPi) * 0.5 * n;
 }
 
-wxColour AreaColour(const online_charts::MvtArea& area) {
-  if (!area.has_drval1) return wxColour(31, 134, 203, 115);
-  const unsigned char alpha = 178;
-  if (area.drval1 < 0.0) return wxColour(88, 175, 156, alpha);
-  if (area.drval1 < 1.99) return wxColour(31, 134, 203, alpha);
-  if (area.drval1 < 4.99) return wxColour(93, 181, 240, alpha);
-  if (area.drval1 < 9.99) return wxColour(127, 199, 248, alpha);
-  if (area.drval1 < 19.99) return wxColour(165, 217, 251, alpha);
-  if (area.drval1 < 49.99) return wxColour(201, 233, 253, alpha);
+unsigned char Alpha(int percent, double scale = 1.0) {
+  const double value = std::max(0, std::min(100, percent)) * 2.55 * scale;
+  return static_cast<unsigned char>(std::lround(std::max(0.0, std::min(255.0, value))));
+}
+
+}  // namespace
+
+namespace online_charts {
+
+// Depth areas (DRVAL1) drawn from the vector layer take the colour of their
+// middle depth; Open Waters' vector areas are mostly drying areas.
+wxColour TopoDepthColour(double drval1) {
+  if (drval1 < 0.0) return wxColour(0xf4, 0xb6, 0xc8);  // Drying.
+  static const double kBands[] = {0, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 11000};
+  double next = drval1 * 2.0 + 2.0;
+  for (double band : kBands) {
+    if (band > drval1 + 1e-6) {
+      next = band;
+      break;
+    }
+  }
+  const Rgba c = TopoColourAtDepth((drval1 + next) / 2.0);
+  return wxColour(c.r, c.g, c.b);
+}
+
+}  // namespace online_charts
+
+namespace {
+
+// depth_colours: 0 = Chart (the light blues of a paper chart), 1 = Topo.
+wxColour AreaColour(bool has_drval1, double drval1, int depth_colours, int opacity) {
+  if (depth_colours == 1) {
+    if (!has_drval1) return wxColour(0x1a, 0xa0, 0xd8, Alpha(opacity, 0.6));
+    const wxColour c = online_charts::TopoDepthColour(drval1);
+    return wxColour(c.Red(), c.Green(), c.Blue(), Alpha(opacity));
+  }
+  if (!has_drval1) return wxColour(31, 134, 203, Alpha(opacity, 0.65));
+  const unsigned char alpha = Alpha(opacity);
+  if (drval1 < 0.0) return wxColour(88, 175, 156, alpha);
+  if (drval1 < 1.99) return wxColour(31, 134, 203, alpha);
+  if (drval1 < 4.99) return wxColour(93, 181, 240, alpha);
+  if (drval1 < 9.99) return wxColour(127, 199, 248, alpha);
+  if (drval1 < 19.99) return wxColour(165, 217, 251, alpha);
+  if (drval1 < 49.99) return wxColour(201, 233, 253, alpha);
   return wxColour(233, 247, 255, alpha);
 }
 
@@ -233,6 +269,7 @@ OnlineChartsOverlay::OnlineChartsOverlay()
 {
   base_map_ = std::make_unique<OnlineChartsLandLayer>();
   seamarks_ = std::make_unique<OnlineChartsLandLayer>();
+  depth_ = std::make_unique<OnlineChartsLandLayer>();
   wxFileName dir(wxStandardPaths::Get().GetUserDataDir(), "");
   dir.AppendDir("online_charts_pi");
   dir.AppendDir("vector_cache");
@@ -282,6 +319,9 @@ void OnlineChartsOverlay::Configure(const OnlineChartsSettings& input) {
   settings_ = input;
   settings_.label_scale = std::max(50, std::min(300, settings_.label_scale));
   settings_.base_map_provider = std::max(0, std::min(1, settings_.base_map_provider));
+  settings_.base_map_opacity = std::max(10, std::min(100, settings_.base_map_opacity));
+  settings_.depth_colours = settings_.depth_colours == 1 ? 1 : 0;
+  settings_.depth_opacity = std::max(10, std::min(100, settings_.depth_opacity));
   settings_.cache_max_mb = std::max(10, std::min(20000, settings_.cache_max_mb));
   settings_.cache_max_age_days = std::max(1, std::min(365, settings_.cache_max_age_days));
   settings_.prefetch_levels = std::max(0, std::min(4, settings_.prefetch_levels));
@@ -290,12 +330,21 @@ void OnlineChartsOverlay::Configure(const OnlineChartsSettings& input) {
         settings_.overlay_enabled && settings_.show_base_map,
         settings_.base_map_provider,
         settings_.overlay_enabled &&
-            settings_.cache_mode != OnlineChartsCacheMode::kOfflineOnly);
+            settings_.cache_mode != OnlineChartsCacheMode::kOfflineOnly,
+        settings_.base_map_opacity);
+  }
+  if (depth_) {
+    depth_->SetDepthColours(settings_.depth_colours);
+    depth_->Configure(settings_.overlay_enabled && settings_.show_shading, 3,
+                      settings_.overlay_enabled &&
+                          settings_.cache_mode != OnlineChartsCacheMode::kOfflineOnly,
+                      settings_.depth_opacity);
   }
   if (seamarks_) {
     seamarks_->Configure(settings_.overlay_enabled && settings_.show_seamarks, 2,
                          settings_.overlay_enabled &&
-                             settings_.cache_mode != OnlineChartsCacheMode::kOfflineOnly);
+                             settings_.cache_mode != OnlineChartsCacheMode::kOfflineOnly,
+                         100);
   }
   if (!settings_.overlay_enabled ||
       settings_.cache_mode == OnlineChartsCacheMode::kOfflineOnly) {
@@ -338,6 +387,7 @@ void OnlineChartsOverlay::Shutdown() {
   shutdown_ = true;
   if (base_map_) base_map_->Shutdown();
   if (seamarks_) seamarks_->Shutdown();
+  if (depth_) depth_->Shutdown();
   CancelRequests();
   download_queue_.clear();
   queued_tiles_.clear();
@@ -582,7 +632,7 @@ void OnlineChartsOverlay::StartDownload(const TileKey& key) {
   }
   request.SetHeader("Accept", "application/x-protobuf, application/octet-stream");
   request.SetHeader("Accept-Encoding", "identity");
-  request.SetHeader("User-Agent", "OnlineCharts-OpenCPN/1.5.3");
+  request.SetHeader("User-Agent", "OnlineCharts-OpenCPN/1.6.0");
   pending.request = request;
 #else
   if (!curl_multi_) {
@@ -596,7 +646,7 @@ void OnlineChartsOverlay::StartDownload(const TileKey& key) {
   }
   const std::string url_utf8 = url.ToUTF8().data();
   curl_easy_setopt(easy, CURLOPT_URL, url_utf8.c_str());
-  curl_easy_setopt(easy, CURLOPT_USERAGENT, "OnlineCharts-OpenCPN/1.5.3");
+  curl_easy_setopt(easy, CURLOPT_USERAGENT, "OnlineCharts-OpenCPN/1.6.0");
   curl_easy_setopt(easy, CURLOPT_ACCEPT_ENCODING, "identity");
   curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
   curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT, 10L);
@@ -769,9 +819,11 @@ void OnlineChartsOverlay::LogRenderState(
   status_.base_error = base_map_ ? base_map_->LastError() : wxString();
   status_.memory_tiles = cache_.size();
   status_.active_requests = requests_.size() + (base_map_ ? base_map_->ActiveRequests() : 0) +
-      (seamarks_ ? seamarks_->ActiveRequests() : 0);
+      (seamarks_ ? seamarks_->ActiveRequests() : 0) +
+      (depth_ ? depth_->ActiveRequests() : 0);
   status_.queued_requests = download_queue_.size() + (base_map_ ? base_map_->QueuedRequests() : 0) +
-      (seamarks_ ? seamarks_->QueuedRequests() : 0);
+      (seamarks_ ? seamarks_->QueuedRequests() : 0) +
+      (depth_ ? depth_->QueuedRequests() : 0);
   status_.zoom = ZoomForViewport(viewport);
   status_.last_error = last_error_;
 
@@ -908,9 +960,9 @@ size_t OnlineChartsOverlay::DrawAreasGl(PlugIn_ViewPort* viewport,
         if (!online_charts::Tessellate(area.rings, &mesh.triangles) || mesh.triangles.empty()) {
           continue;
         }
-        mesh.colour = AreaColour(area);
         mesh.rank = area.rank;
         mesh.drval1 = area.drval1;
+        mesh.has_drval1 = area.has_drval1;
         meshes->push_back(std::move(mesh));
       }
       entry->meshes = meshes;
@@ -932,7 +984,8 @@ size_t OnlineChartsOverlay::DrawAreasGl(PlugIn_ViewPort* viewport,
     for (size_t i = 0; i + 1 < triangles.size(); i += 2) {
       projector.Project(triangles[i], triangles[i + 1], &screen[i], &screen[i + 1]);
     }
-    const wxColour& c = reference.mesh->colour;
+    const wxColour c = AreaColour(reference.mesh->has_drval1, reference.mesh->drval1,
+                                  settings_.depth_colours, settings_.depth_opacity);
     glColor4ub(c.Red(), c.Green(), c.Blue(), c.Alpha());
     glVertexPointer(2, GL_FLOAT, 0, screen.data());
     glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(screen.size() / 2));
@@ -988,7 +1041,8 @@ size_t OnlineChartsOverlay::DrawAreasDc(piDC& dc, wxDC* wx_dc, PlugIn_ViewPort* 
       rings.push_back(std::move(points));
     }
     if (rings.empty()) continue;
-    const wxColour colour = AreaColour(*reference.area);
+    const wxColour colour = AreaColour(reference.area->has_drval1, reference.area->drval1,
+                                       settings_.depth_colours, settings_.depth_opacity);
 #if wxUSE_GRAPHICS_CONTEXT
     if (graphics) {
       wxGraphicsPath path = graphics->CreatePath();
@@ -1024,6 +1078,8 @@ void OnlineChartsOverlay::RenderTiles(piDC* dc, wxDC* wx_dc, PlugIn_ViewPort* vi
   // Draw the public raster reference map first, below all vector bathymetry.
   status_.base_tiles = base_map_ ? base_map_->Render(dc, viewport, pixel_scale_) : 0;
   status_.base_error = base_map_ ? base_map_->LastError() : wxString();
+  // Depth colours by band, from the elevation raster, as in the extension.
+  status_.depth_tiles = depth_ && settings_.show_shading ? depth_->Render(dc, viewport, pixel_scale_) : 0;
 
   std::vector<ReadyTile> ready;
   for (const auto& key : keys) {
@@ -1034,7 +1090,9 @@ void OnlineChartsOverlay::RenderTiles(piDC* dc, wxDC* wx_dc, PlugIn_ViewPort* vi
   size_t drawn_areas = 0;
   size_t drawn_contours = 0;
   size_t drawn_soundings = 0;
-  if (settings_.show_shading && !ready.empty()) {
+  // The vector depth areas (mostly drying areas) are drawn only without the
+  // raster, for example offline: the raster already colours them.
+  if (settings_.show_shading && status_.depth_tiles == 0 && !ready.empty()) {
     drawn_areas = gl_pass_ ? DrawAreasGl(viewport, ready) : DrawAreasDc(*dc, wx_dc, viewport, ready);
   }
 
@@ -1066,7 +1124,10 @@ void OnlineChartsOverlay::RenderTiles(piDC* dc, wxDC* wx_dc, PlugIn_ViewPort* vi
         if (!has_depth) continue;
         const double depth = settings_.depth_feet ? contour.depth_ft : contour.depth_m;
         const bool major = std::fabs(std::fabs(depth) - (settings_.depth_feet ? 30.0 : 10.0)) < 0.01;
-        const wxColour colour = major ? wxColour(76, 91, 99, 255) : wxColour(101, 127, 140, 255);
+        // Topo's bright bands need darker contours, as in the extension.
+        const bool topo = settings_.depth_colours == 1 && settings_.show_shading;
+        const wxColour colour = topo ? (major ? wxColour(0x1f, 0x1f, 0x1f) : wxColour(0x3a, 0x3a, 0x3a))
+                                     : (major ? wxColour(76, 91, 99, 255) : wxColour(101, 127, 140, 255));
         if (gl_pass_) {
           glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 230);
           glLineWidth(static_cast<GLfloat>(std::max(1.0, (major ? 1.6 : 0.9) * pixel_scale_)));
@@ -1267,9 +1328,11 @@ wxString OnlineChartsOverlay::StatusDetail(PlugIn_ViewPort* viewport, size_t vis
   }
   status_.detail = detail;
   status_.active_requests = requests_.size() + (base_map_ ? base_map_->ActiveRequests() : 0) +
-      (seamarks_ ? seamarks_->ActiveRequests() : 0);
+      (seamarks_ ? seamarks_->ActiveRequests() : 0) +
+      (depth_ ? depth_->ActiveRequests() : 0);
   status_.queued_requests = download_queue_.size() + (base_map_ ? base_map_->QueuedRequests() : 0) +
-      (seamarks_ ? seamarks_->QueuedRequests() : 0);
+      (seamarks_ ? seamarks_->QueuedRequests() : 0) +
+      (depth_ ? depth_->QueuedRequests() : 0);
   return detail;
 }
 
@@ -1285,6 +1348,7 @@ void OnlineChartsOverlay::DrawStatus(piDC* dc, PlugIn_ViewPort* viewport, const 
                            : wxString("Base map: Esri, Garmin, GEBCO, NOAA NGDC, and other contributors"),
                        wxColour(80, 95, 100));
   }
+  for (const auto& credit : extra_credits_) lines.emplace_back(credit, wxColour(80, 95, 100));
   // Keep clear of OpenCPN's own scale bar in the bottom-left corner.
   const float x = static_cast<float>(8 * pixel_scale_);
   float y = static_cast<float>(viewport->pix_height) - static_cast<float>(40 * pixel_scale_);
@@ -1310,9 +1374,11 @@ void OnlineChartsOverlay::DrawStatus(piDC* dc, PlugIn_ViewPort* viewport, const 
 OnlineChartsStatus OnlineChartsOverlay::Status() {
   status_.memory_tiles = cache_.size();
   status_.active_requests = requests_.size() + (base_map_ ? base_map_->ActiveRequests() : 0) +
-      (seamarks_ ? seamarks_->ActiveRequests() : 0);
+      (seamarks_ ? seamarks_->ActiveRequests() : 0) +
+      (depth_ ? depth_->ActiveRequests() : 0);
   status_.queued_requests = download_queue_.size() + (base_map_ ? base_map_->QueuedRequests() : 0) +
-      (seamarks_ ? seamarks_->QueuedRequests() : 0);
+      (seamarks_ ? seamarks_->QueuedRequests() : 0) +
+      (depth_ ? depth_->QueuedRequests() : 0);
   status_.last_error = last_error_;
   status_.base_error = base_map_ ? base_map_->LastError() : wxString();
   size_t disk_tiles = 0;

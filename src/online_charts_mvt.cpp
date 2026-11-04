@@ -130,8 +130,10 @@ bool ParseValue(const uint8_t* data, size_t size, Value* value) {
       if (!reader.Varint(&integer)) return false;
       if (field == 6) integer = static_cast<uint64_t>((integer >> 1) ^ (~(integer & 1) + 1));
       value->type = Value::Type::kNumber;
-      value->number = field == 4 ? static_cast<double>(static_cast<int64_t>(integer))
-                                 : static_cast<double>(integer);
+      // int (4) and zigzag sint (6) are signed; only uint (5) is unsigned.
+      // Drying heights (negative DRVAL1) are sint values.
+      value->number = field == 5 ? static_cast<double>(integer)
+                                 : static_cast<double>(static_cast<int64_t>(integer));
     } else if (field == 7 && wire == 0) {
       if (!reader.Varint(&integer)) return false;
       value->type = Value::Type::kBool;

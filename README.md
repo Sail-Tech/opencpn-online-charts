@@ -2,9 +2,10 @@
 
 A native [OpenCPN](https://opencpn.org) plugin that draws free online marine data directly on the OpenCPN chart:
 
-- **Bathymetry** from Open Waters Seascape: depth areas, contours and soundings, in metres or feet.
+- **Bathymetry** from Open Waters Seascape: depth colours, contours and soundings, in metres or feet. Depth colours by band as on a paper chart (light blues) or **Topo**, from red in the shallows to deep blue, as in the GPS Charts extension.
 - **Seamarks** from OpenSeaMap: buoys, beacons, lights with their sectors, harbours and restricted areas.
-- **Base map** (optional): Esri World Ocean Base or OpenStreetMap below the bathymetry.
+- **Base map** (optional, off by default): Esri World Ocean Base or OpenStreetMap below the bathymetry, with adjustable opacity. OpenCPN draws plugins above its charts, so the base map covers them.
+- **AIS demo** (optional): live vessels in the chart view from [Open Waters AIS](https://openwaters.io/ais/), shown as OpenCPN's own AIS targets. Testing only, not for navigation.
 - **Marine weather** from Open-Meteo, falling back to MET Norway:
   - wind barbs to the standard convention, wave arrows and red ocean-current arrows across the chart;
   - a Weather window with the conditions and the forecast model;
@@ -50,7 +51,7 @@ A native [OpenCPN](https://opencpn.org) plugin that draws free online marine dat
 2. In OpenCPN open **Options → Plugins**, choose **Import plugin…** and select the downloaded `.tar.gz`. Do not unpack or rename it.
 3. Enable **OnlineCharts** in the plugin list and restart OpenCPN if asked.
 4. Three buttons appear in the toolbar:
-   - **Online Charts** shows or hides everything the plugin draws.
+   - **Online Charts** opens the quick panel (below): display brightness, the layers, depth colours, base map, seamarks and AIS demo, Locate boat, the Weather window and the full settings.
    - **Weather** shows or hides the Weather window.
    - **Open provider** (red pin) opens i-Boating, C-MAP or Garmin Marine at the boat.
 
@@ -62,7 +63,7 @@ The plugin reads public MVT/PBF tiles from:
 
 `https://tiles.openwaters.io/seascape/{z}/{x}/{y}.pbf`
 
-It renders the `depare`, `contours` and `soundings` layers over the current OpenCPN viewport. New tiles are downloaded asynchronously and the canvas is refreshed when data becomes available. No protected C-MAP or i-Boating vector endpoint is accessed or bypassed.
+It renders the `depare`, `contours` and `soundings` layers over the current OpenCPN viewport. The depth colours come from Open Waters' elevation raster, `https://tiles.openwaters.io/seascape/{z}/{x}/{y}.webp` (512-pixel WebP tiles, terrarium encoding, up to zoom 15 here), coloured per pixel like the extension's MapLibre `color-relief` layers. The vector `depare` layer holds only drying areas, so it is drawn only when the raster is unavailable, for example offline. The raster is network-only, like the base map; wxWidgets 3.2 cannot read WebP, so the plugin includes the libwebp decoder. New tiles are downloaded asynchronously and the canvas is refreshed when data becomes available. No protected C-MAP or i-Boating vector endpoint is accessed or bypassed.
 
 The native disk cache is stored below the OpenCPN user data directory in `online_charts_pi/vector_cache`. It uses configurable freshness and size limits, supports offline-only operation and can prefetch the visible area by additional zoom levels. A tile past its refresh age is still drawn until a newer one arrives. When the cache passes its size limit (or 20000 tiles) the oldest downloads are removed down to 90%, but never the tiles of the latest saved area. The auxiliary browser dashboard has its own separately configurable cache.
 
@@ -70,12 +71,29 @@ The native disk cache is stored below the OpenCPN user data directory in `online
 
 In the OpenGL canvas the base map, bathymetry and seamarks are drawn in OpenCPN's chart pass (`OVERLAY_CHARTS`). That is right after the charts and below OpenCPN's routes, waypoints, tide and current stations, AIS targets and own ship. The weather symbols, panel and forecast time bar are drawn in the legacy pass above them. Before 1.4.0 everything was drawn in the legacy pass, so the opaque base map hid the tide and current stations, routes and waypoints, and the plugin was also drawn twice per frame. OpenCPN calls both `RenderGLOverlay` and `RenderGLOverlayMultiCanvas` for API 1.18 plugins, so the plugin now draws only in the multi-canvas callbacks. Hosts without the chart pass get the chart layers in the legacy pass. In the wxDC (non-OpenGL) canvas OpenCPN draws tide and current stations after the plugins, so they stay visible there too.
 
+OpenCPN has no plugin pass below its charts, so everything the plugin draws covers the charts, o-charts included. The base map is therefore off by default since 1.6.0, and both the base map and the depth colours have an opacity setting.
+
+## Quick panel
+
+The **Online Charts** toolbar button opens a small panel with the options used while sailing. Every change applies at once, so its effect shows on the chart beside it, and is saved:
+
+- **Show Online Charts on the chart**: everything the plugin draws, on or off (the button looks pressed while it is on);
+- **Display brightness**: **Day**, **75%**, **55%**, **40%** and **Night**, the steps of the extension's brightness button. The plugin draws a filter over the whole chart in OpenCPN's last pass: the chart is dimmed for the three dusk steps, and at night it is inverted (the light chart dark, the dark lines light) and turned red, which keeps night vision. Inverting needs a light chart, so night puts OpenCPN in its day palette (plugin API 1.18 has no call for this: the plugin presses OpenCPN's colour-scheme key, F5, on the chart). OpenCPN's own Day/Dusk/Night (F5) still works; choosing its dusk or night palette ends the plugin's red night. Windows outside the chart (status bar, dialogs) are not filtered. The step is remembered;
+- **Depths**: colours **Off**, **Chart** or **Topo**, their **Opacity**, **Contours and soundings**, units **m** or **ft**;
+- **Base map**: **Off**, **Esri** or **OSM**, its **Opacity**, and **OpenSeaMap seamarks**;
+- **AIS demo**: on or off, with its live status (connection, events, how many targets OpenCPN tracks);
+- buttons: **Locate boat** centres the chart on the boat at the current scale (OpenCPN's own follow mode is left as it is; without a position yet the panel says so), **Weather** shows or hides the Weather window, **More settings** opens the preferences dialog.
+
+The choices are buttons rather than lists, with 32-pixel controls for touch screens. The panel stays open while the chart is used, and closes with its close button, Esc or the toolbar button. It follows OpenCPN's day, dusk and night colours.
+
 ## Preferences
 
-Open **Options → Plugins → OnlineCharts → Preferences**. The native English dialog has three tabs: **Chart**, **Weather** and **Offline cache and status**. It provides:
+The settings changed less often (cache, labels, providers, weather) are under **More settings** in the quick panel, or **Options → Plugins → OnlineCharts → Preferences**. The native English dialog has three tabs: **Chart**, **Weather** and **Offline cache and status**. It provides:
 
 - overlay enable, depth contours and labels, point soundings, depth colours and chart status;
-- an optional raster reference base map below the bathymetry, with **Esri World Ocean Base** (default) or **OpenStreetMap**;
+- an optional raster base map below the bathymetry, off by default, with **Esri World Ocean Base** (default) or **OpenStreetMap** and an **Opacity (%)**. It is drawn over the OpenCPN charts, o-charts included, because OpenCPN gives plugins no pass below the charts; at 100 % it hides them. Esri's detailed tiles (up to zoom 16) are regional; where they are missing the nearest coarser tile is magnified;
+- **Depth colours**: **Chart** (the light blues of a paper chart, a colour per band at 2, 5, 10, 20 and 50 m, drying areas green) or **Topo** (Open Waters' Topo view, as in the GPS Charts extension: red in the shallows through orange, yellow and green to deep blue, drying areas pink), with an **Opacity (%)** so the OpenCPN chart can show through. Land is left clear;
+- the **AIS demo** described below;
 - **OpenSeaMap seamarks** above the bathymetry (buoys, beacons, lights with their sectors, marinas, cables and restricted areas), on by default, as in the browser dashboard;
 - metres or feet, using the unit-specific values published by Open Waters;
 - **Depth label size (%)**, 50–300 %: at 100 % the contour and sounding numbers follow the browser dashboard, about 10 px when zoomed out and growing to 18 px when zoomed in;
@@ -86,6 +104,17 @@ Open **Options → Plugins → OnlineCharts → Preferences**. The native Englis
 - **Clear cache**, **Refresh status**, visible/ready tile counts, drawn-object counters, the overlay drawing time per frame and the latest network or OpenGL issue.
 
 Choices accepted with **OK** are written to the OpenCPN configuration under `/PlugIns/OnlineCharts` and restored on the next start. The toolbar state is also persistent. Base-chart selection and GPS input remain OpenCPN settings; browser-only provider and serial-port controls are not duplicated in this native dialog.
+
+## AIS demo
+
+**AIS demo** in the **Chart** tab shows live vessels in the chart view from [Open Waters AIS](https://openwaters.io/ais/), as the GPS Charts extension's AIS demo does. It is off by default.
+
+- The plugin reads Open Waters' server-sent events stream (`https://ais.openwaters.io/v1/stream`, anonymous, no key) for the visible area plus a margin, up to the anonymous limit of 100 square degrees, and follows the chart when it moves.
+- Each event's raw `!AIVDM` sentences go to OpenCPN with `PushNMEABuffer`, so the vessels are OpenCPN's own AIS targets: CPA/TCPA, the target list and alarms work as with a receiver. Static reports that Open Waters sends without NMEA are encoded as AIS message 5, so the targets have their names.
+- The first snapshot holds each vessel's last report, some hours old. OpenCPN dates a target from when it hears it, so positions older than 10 minutes are skipped.
+- The sources are credited on the chart, for example *Open Waters AIS · AISHub · aisstream.io*. The status line under the option shows the connection, the events received and how many AIS targets OpenCPN tracks.
+
+Shore stations are close to real time; aisstream.io is about 17 s late and AISHub about a minute. This is not a replacement for an AIS receiver. If OpenCPN forwards NMEA to other devices or networks, these targets go there too; never send them back to an AIS network as your own reception.
 
 ## Weather
 
@@ -146,6 +175,7 @@ The plugin only reads public services, as an ordinary client. It does not use cr
 | Bathymetry (depth areas, contours, soundings) | [Open Waters Seascape](https://openwaters.io/charts/seascape) | CC BY 4.0; underlying EMODnet, GEBCO and other open sources |
 | Seamarks | [OpenSeaMap](https://openseamap.org) | CC BY-SA, © OpenSeaMap contributors |
 | Base map | [OpenStreetMap](https://www.openstreetmap.org) or [Esri World Ocean Base](https://www.arcgis.com/home/item.html?id=1e126e7520f9466c9ca28b8f28b5e500) | ODbL / © OpenStreetMap contributors (no offline use, per the [tile policy](https://operations.osmfoundation.org/policies/tiles/)); Esri, Garmin, GEBCO, NOAA NGDC and other contributors |
+| AIS demo | [Open Waters AIS](https://openwaters.io/ais/) (shore stations, AISHub, aisstream.io and others) | Each source's own terms, credited on the chart as received |
 | Weather, waves, ocean currents | [Open-Meteo](https://open-meteo.com) Forecast and Marine APIs | CC BY 4.0; free for non-commercial use within its request limits |
 | Weather fallback | [MET Norway Locationforecast](https://api.met.no) | CC BY 4.0 (Norwegian Meteorological Institute) |
 
@@ -227,6 +257,8 @@ WXDEPS=/path/to/macos_deps_universal ARCHS="x86_64 arm64" ci/build-macos-local.s
 ```bash
 c++ -std=c++17 -Isrc tests/json_test.cpp src/online_charts_json.cpp -o json_test && ./json_test
 c++ -std=c++17 -Isrc tests/geohash_test.cpp -o geohash_test && ./geohash_test
+cc -c -O2 -Ilibs/libwebp libs/libwebp/src/*/*.c && c++ -std=c++17 -Isrc -Ilibs/libwebp tests/depth_test.cpp src/online_charts_depth.cpp *.o -o depth_test && ./depth_test [tile.webp]
+c++ -std=c++17 -Isrc tests/aisdata_test.cpp src/online_charts_aisdata.cpp src/online_charts_json.cpp -o aisdata_test && ./aisdata_test [recorded-stream.txt]
 ```
 
 `tests/server_smoke.cpp` starts the auxiliary dashboard server and broadcasts a test position.
@@ -236,17 +268,22 @@ c++ -std=c++17 -Isrc tests/geohash_test.cpp -o geohash_test && ./geohash_test
 ```text
 src/online_charts_pi.*            Plugin entry points, toolbar buttons, settings, overlay passes
 src/online_charts_overlay.*       Open Waters bathymetry: tiles, cache, OpenGL and wxDC drawing, labels
-src/online_charts_land.*          Raster layers: OpenStreetMap / Esri base map and OpenSeaMap seamarks
+src/online_charts_land.*          Raster layers: OpenStreetMap / Esri base map, depth colours, OpenSeaMap seamarks
+src/online_charts_depth.*         Depth colours (Chart, Topo) from the Open Waters elevation raster
 src/online_charts_mvt.*           Mapbox Vector Tile (PBF) parser
 src/online_charts_render.*        Fast projection, polygon tessellation, glyph-atlas text, GL helpers
 src/online_charts_weather.*       Open-Meteo / MET Norway weather, field lattice, cache, symbols, time bar
 src/online_charts_weather_window.*  The floating Weather window
+src/online_charts_quick_panel.*   Quick panel of the toolbar button
 src/online_charts_preferences.*   Preferences dialog (Chart, Weather, Offline cache and status)
-src/online_charts_http.*          Asynchronous HTTPS: wxWebRequest or libcurl
+src/online_charts_ais.*           AIS demo: Open Waters stream following the chart, into OpenCPN's AIS
+src/online_charts_aisdata.*       Server-sent events, NMEA preparation, AIS message 5 encoding
+src/online_charts_http.*          Asynchronous HTTPS (requests and streams): wxWebRequest or libcurl
 src/online_charts_json.*          Minimal locale-independent JSON reader
 src/online_charts_geohash.h       Geohash and Garmin Marine URL for Open provider
 src/online_charts_server.*        Loopback server for the auxiliary dashboard (CivetWeb)
 data/                             Toolbar icons and the auxiliary browser dashboard
+libs/                             CivetWeb and the libwebp decoder
 ci/, cmake/, opencpn-libs/        Build scripts, OpenCPN plugin API and shared plugin libraries
 ```
 
@@ -255,6 +292,7 @@ ci/, cmake/, opencpn-libs/        Build scripts, OpenCPN plugin API and shared p
 GPL-3.0-or-later, see [COPYING](COPYING). Third-party components:
 - The OpenCPN plugin API and the ShipDriver build infrastructure.
 - CivetWeb 1.16, MIT licence (`libs/civetweb/LICENSE.md`).
+- libwebp 1.6.0 decoder, BSD licence (`libs/libwebp/COPYING`, `PATENTS`).
 - MapLibre GL JS 5.24.0 (`data/online_charts/vendor/LICENSE.txt`).
 
 Map and weather data stay under the terms of their providers (see above). See [CHANGELOG.md](CHANGELOG.md) for the release history.

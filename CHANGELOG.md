@@ -2,6 +2,23 @@
 
 Release history of the OpenCPN Online Charts plugin, newest first. Build and validation notes for each release are in [BUILD_STATUS.md](BUILD_STATUS.md).
 
+## 1.6.0 — Base map off over charts, Topo depth colours and AIS demo
+
+**Base map over the charts.** A user reported that enabling the plugin made their o-charts blurry. OpenCPN draws plugins after its charts, and has no pass below them, so the plugin's base map, on by default and opaque, covered every chart. Esri World Ocean Base was also limited to zoom 10, about 150 m per pixel, and stretched up to 64 times at harbour scale. Now:
+
+- The base map is off by default. Settings saved by earlier versions turn it off once; it can be turned on again in the preferences and then stays on.
+- The base map has an **Opacity (%)**, 60 % by default, so the chart shows through.
+- Esri tiles are requested up to zoom 16 where Esri has them (for example around the British Isles); where a detailed tile is missing (HTTP 404) the nearest coarser one is magnified instead.
+- The depth colours have an **Opacity (%)** too (70 %, as before).
+
+**Depth colours by band, and Topo.** Open Waters' vector depth areas turned out to hold only drying areas, so until now the plugin coloured nothing but those, and in the wrong colour (see below). The depth colours now come from Open Waters' elevation raster, as in the GPS Charts extension: **Chart** gives the light blues of a paper chart by band (2, 5, 10, 20 and 50 m, drying areas green), and the new **Topo** (**Depth colours** in the Chart tab) goes from red in the shallows through orange, yellow and green to deep blue, with drying areas pink, as in the extension 0.12.0 and Open Waters' Topo view. Land is left clear. Contours are drawn darker over Topo. The raster tiles are WebP, which wxWidgets 3.2 cannot read, so the plugin now includes the libwebp 1.6.0 decoder (BSD licence, `libs/libwebp`), with its functions kept private to the plugin. The raster is network-only; offline, the cached drying areas are drawn instead. New `tests/depth_test.cpp`.
+
+**Drying areas.** Negative whole numbers in the vector tiles (zigzag `sint`), such as a drying area's DRVAL1, were read as unsigned, about 1.8 × 10¹⁹ m, so drying areas took the colour of the deepest water.
+
+**Quick panel.** The **Online Charts** toolbar button now opens a small panel with the options used while sailing, instead of only switching everything on or off: the master switch, display brightness in the extension's steps (Day, Dusk 75 %, 55 %, 40 % and a red night: a filter the plugin draws over the whole chart, inverted and red at night), depth colours (Off, Chart, Topo) and their opacity, contours and soundings, units, the base map (Off, Esri, OSM) and its opacity, seamarks and the AIS demo with its live status. Changes apply at once. Buttons locate the boat (centre the chart on it), open the Weather window and open the preferences. Touch-sized controls; it stays open while the chart is used and closes with its button, Esc or the toolbar button; it follows OpenCPN's day, dusk and night colours.
+
+**AIS demo.** Live vessels in the chart view from [Open Waters AIS](https://openwaters.io/ais/), shown as OpenCPN's own AIS targets, as in the GPS Charts extension 0.13.0. The plugin reads Open Waters' anonymous server-sent events stream for the visible area and follows the chart; the raw `!AIVDM` sentences go to OpenCPN's AIS decoder. Static reports sent without NMEA are encoded as AIS message 5, so the targets have names, and positions older than 10 minutes from the first snapshot are skipped. The sources are credited on the chart. Off by default; testing only, not for navigation. New `tests/aisdata_test.cpp`.
+
 ## 1.5.3 — Garbled characters on Windows
 
 **Windows.** The Weather window and the preferences showed garbled characters on Windows, for example `Â°C` instead of `°C`, `â€”` instead of `—` and ` Â· ` instead of ` · `, and the forecast model list could show a broken *Météo-France*. The Microsoft compiler read the UTF-8 source files in the Windows code page. The Windows build now compiles with `/utf-8`, and the three status lines in the preferences that used plain `char` text are now wide strings, which wxWidgets on Windows does not convert through the code page. No other changes.

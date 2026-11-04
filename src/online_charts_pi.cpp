@@ -1,5 +1,6 @@
 #include "online_charts_pi.h"
 
+#include "online_charts_display.h"
 #include "online_charts_geohash.h"
 #include "online_charts_overlay.h"
 #include "online_charts_preferences.h"
@@ -11,6 +12,7 @@
 #include <wx/log.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
+#include <wx/settings.h>
 #include <wx/utils.h>
 
 #include <algorithm>
@@ -138,8 +140,22 @@ OnlineChartsSettings LoadSettings() {
   config->Read("ShowSoundings", &settings.show_soundings, true);
   config->Read("ShowShading", &settings.show_shading, true);
   config->Read("ShowStatus", &settings.show_status, true);
-  config->Read("ShowBaseMap", &settings.show_base_map, true);
+  // Up to 1.5.3 the base map was on by default, drawn opaque over the OpenCPN
+  // charts (o-charts and others looked blurred under it). Settings saved by
+  // those versions turn it off once; it stays as chosen from then on.
+  int settings_version = 0;
+  config->Read("SettingsVersion", &settings_version, 0);
+  config->Read("ShowBaseMap", &settings.show_base_map, false);
+  if (settings_version < 160 && settings.show_base_map) {
+    settings.show_base_map = false;
+    wxLogMessage("Online Charts: base map turned off (it covered the OpenCPN charts); "
+                 "it can be turned on again in the preferences");
+  }
   config->Read("BaseMapProvider", &settings.base_map_provider, 1);
+  config->Read("BaseMapOpacity", &settings.base_map_opacity, 60);
+  config->Read("DepthColours", &settings.depth_colours, 0);
+  config->Read("DepthOpacity", &settings.depth_opacity, 70);
+  config->Read("AisDemo", &settings.ais_demo, false);
   config->Read("ShowSeamarks", &settings.show_seamarks, true);
   settings.base_map_provider = std::max(0, std::min(1, settings.base_map_provider));
   config->Read("DepthFeet", &settings.depth_feet, false);
@@ -217,8 +233,13 @@ void SaveSettings(const OnlineChartsSettings& settings) {
   config->Write("ShowSoundings", settings.show_soundings);
   config->Write("ShowShading", settings.show_shading);
   config->Write("ShowStatus", settings.show_status);
+  config->Write("SettingsVersion", 160);
   config->Write("ShowBaseMap", settings.show_base_map);
   config->Write("BaseMapProvider", settings.base_map_provider);
+  config->Write("BaseMapOpacity", settings.base_map_opacity);
+  config->Write("DepthColours", settings.depth_colours);
+  config->Write("DepthOpacity", settings.depth_opacity);
+  config->Write("AisDemo", settings.ais_demo);
   config->Write("ShowSeamarks", settings.show_seamarks);
   config->Write("DepthFeet", settings.depth_feet);
   config->Write("DepthLabelScale", settings.label_scale);
@@ -248,13 +269,27 @@ int OnlineChartsPi::Init() {
   weather_settings_ = LoadWeatherSettings();
   weather_ = std::make_unique<OnlineChartsWeather>();
   weather_->Configure(weather_settings_);
+  // OpenCPN's AIS decoder reads these like sentences from a receiver.
+  ais_ = std::make_unique<OnlineChartsAis>([](const wxString& sentence) {
+    PushNMEABuffer(sentence + "\r\n");
+  });
+  ais_log_timer_.Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+    if (!ais_ || !ais_->Enabled() || ++ais_log_count_ > 10) {
+      ais_log_timer_.Stop();
+      return;
+    }
+    wxString status = AisStatus();
+    status.Replace("\n", "; ");
+    wxLogMessage("Online Charts: %s", status);
+  });
+  ApplyAis();
 
   const wxString icon = DataFile("online_charts_pi.svg");
   const wxString toggled = DataFile("online_charts_pi_toggled.svg");
   if (wxFileName::FileExists(icon)) {
     toolbar_tool_id_ = InsertPlugInToolSVG(
         "Online Charts", icon, icon, toggled, wxITEM_CHECK, "Online Charts",
-        "Toggle online vector bathymetry over the active OpenCPN chart",
+        "Online Charts: depth colours, base map, seamarks, AIS demo and more",
         nullptr, -1, 0, this);
     SetToolbarItemState(toolbar_tool_id_, overlay_enabled_);
     panel_bitmap_ = GetBitmapFromSVGFile(icon, 48, 48);
@@ -284,6 +319,25 @@ int OnlineChartsPi::Init() {
   });
   benchmark_timer_.Start(30);
 #endif
+#ifdef ONLINE_CHARTS_UI_TEST
+  // Local test builds only: open the quick panel, then go through the five
+  // display steps, four seconds each, for screenshots.
+  GetOCPNCanvasWindow()->CallAfter([this]() {
+    auto* timer = new wxTimer();
+    auto* step = new int(0);
+    timer->Bind(wxEVT_TIMER, [this, timer, step](wxTimerEvent&) {
+      ++*step;
+      if (*step == 1) ToggleQuickPanel();
+      if (*step >= 2 && *step <= 6) {
+        SetDisplayLevel(*step - 2);
+        wxLogMessage("Online Charts: test display level %d at %ld, scheme %d", *step - 2,
+                     static_cast<long>(std::time(nullptr)), static_cast<int>(colour_scheme_));
+      }
+      if (*step == 7) timer->Stop();
+    });
+    timer->Start(4000);
+  });
+#endif
   wxLogMessage("Online Charts: Init complete");
   const wxString weather_icon = DataFile("online_charts_weather.svg");
   const wxString weather_toggled = DataFile("online_charts_weather_toggled.svg");
@@ -305,6 +359,8 @@ int OnlineChartsPi::Init() {
     const wxString previous_path = config->GetPath();
     config->SetPath("/PlugIns/OnlineCharts");
     config->Read("WeatherWindowShown", &weather_window_shown_, true);
+    config->Read("DisplayLevel", &display_level_, 0);
+    display_level_ = std::max(0, std::min(online_charts::kDisplaySteps - 1, display_level_));
     config->SetPath(previous_path);
   }
   // Open the window once OpenCPN has finished building its main frame.
@@ -327,6 +383,10 @@ bool OnlineChartsPi::DeInit() {
     delete weather_window_;
     weather_window_ = nullptr;
   }
+  if (quick_panel_) {
+    delete quick_panel_;  // As the Weather window: not Destroy(), see above.
+    quick_panel_ = nullptr;
+  }
   if (weather_tool_id_ >= 0) {
     RemovePlugInTool(weather_tool_id_);
     weather_tool_id_ = -1;
@@ -334,6 +394,11 @@ bool OnlineChartsPi::DeInit() {
   if (provider_tool_id_ >= 0) {
     RemovePlugInTool(provider_tool_id_);
     provider_tool_id_ = -1;
+  }
+  ais_log_timer_.Stop();
+  if (ais_) {
+    ais_->Shutdown();
+    ais_.reset();
   }
   if (weather_) {
     weather_->Shutdown();
@@ -465,13 +530,135 @@ void OnlineChartsPi::OnToolbarToolCallback(int id) {
     return;
   }
   if (id != toolbar_tool_id_) return;
-  overlay_enabled_ = !overlay_enabled_;
-  settings_.overlay_enabled = overlay_enabled_;
-  if (overlay_) overlay_->Configure(settings_);
+  // The button opens the quick panel; its pressed look shows whether the
+  // layers are on, which OpenCPN toggled on the click, so it is set back.
   SetToolbarItemState(toolbar_tool_id_, overlay_enabled_);
+  ToggleQuickPanel();
+}
+
+void OnlineChartsPi::ApplySettings(const OnlineChartsSettings& settings) {
+  if (!overlay_) return;
+  const bool was_enabled = overlay_enabled_;
+  settings_ = settings;
+  overlay_enabled_ = settings_.overlay_enabled;
+  overlay_->Configure(settings_);
+  if (toolbar_tool_id_ >= 0) SetToolbarItemState(toolbar_tool_id_, overlay_enabled_);
   SaveSettings(settings_);
-  wxLogMessage("Online Charts: overlay %s", overlay_enabled_ ? "On" : "Off");
+  ApplyAis();
+  if (was_enabled != overlay_enabled_) {
+    wxLogMessage("Online Charts: overlay %s", overlay_enabled_ ? "On" : "Off");
+  }
   RequestRefresh(GetOCPNCanvasWindow());
+}
+
+void OnlineChartsPi::ToggleQuickPanel() {
+  if (quick_panel_ && quick_panel_->IsShown()) {
+    quick_panel_->Hide();
+    return;
+  }
+  wxWindow* canvas = GetOCPNCanvasWindow();
+  if (!quick_panel_) {
+    OnlineChartsQuickPanel::Actions actions;
+    actions.apply = [this](const OnlineChartsSettings& settings) { ApplySettings(settings); };
+    actions.weather = [this]() { ShowWeatherWindow(!weather_window_shown_); };
+    actions.locate = [this]() { return LocateBoat(); };
+    actions.brightness = [this](int level) { SetDisplayLevel(level); };
+    actions.preferences = [this]() { ShowPreferencesDialog(GetOCPNCanvasWindow()); };
+    actions.ais_status = [this]() { return AisStatus(); };
+    quick_panel_ = new OnlineChartsQuickPanel(wxGetTopLevelParent(canvas), settings_, actions);
+    ApplyColourScheme();
+  }
+  quick_panel_->Sync(settings_);
+  // Top left of the chart, beside OpenCPN's toolbar.
+  const wxPoint origin = canvas->GetScreenPosition();
+  quick_panel_->Move(origin.x + 64, origin.y + 16);
+  quick_panel_->Show();
+  quick_panel_->Raise();
+}
+
+// Centres the chart on the boat at the current scale, like the extension's
+// "Centre on the boat". OpenCPN's own follow mode is left as it is.
+bool OnlineChartsPi::LocateBoat() {
+  if (!has_own_position_) return false;
+  JumpToPosition(own_lat_, own_lon_, view_scale_ppm_ > 0.0 ? view_scale_ppm_ : 0.05);
+  return true;
+}
+
+// One of the five display steps (Day, Dusk 75 %, 55 %, 40 %, Night), as the
+// extension's brightness button: the plugin's filter over the chart, drawn in
+// the last pass. Night puts OpenCPN in its day palette, which it inverts.
+// Remembered across starts. OpenCPN's own Day/Dusk/Night (F5) still works.
+void OnlineChartsPi::SetDisplayLevel(int level) {
+  display_level_ = std::max(0, std::min(online_charts::kDisplaySteps - 1, level));
+  const int scheme = online_charts::DisplayStepAt(display_level_).scheme;
+  if (scheme >= 0) SetOpenCpnScheme(scheme);
+  if (quick_panel_) quick_panel_->SetBrightness(display_level_);
+  ApplyColourScheme();
+  if (wxFileConfig* config = GetOCPNConfigObject()) {
+    config->Write("/PlugIns/OnlineCharts/DisplayLevel", display_level_);
+  }
+  wxLogMessage("Online Charts: display %s", online_charts::DisplayStepAt(display_level_).name);
+  RequestRefresh(GetOCPNCanvasWindow());
+}
+
+// Day, dusk or night for the whole of OpenCPN. Plugin API 1.18 cannot set the
+// colour scheme, so the plugin presses OpenCPN's own F5 key on the chart until
+// OpenCPN reports the wanted scheme (F5 steps day, dusk, night, dusk, day).
+void OnlineChartsPi::SetOpenCpnScheme(int scheme) {
+  const PI_ColorScheme wanted = scheme <= 0   ? PI_GLOBAL_COLOR_SCHEME_DAY
+                                : scheme == 1 ? PI_GLOBAL_COLOR_SCHEME_DUSK
+                                              : PI_GLOBAL_COLOR_SCHEME_NIGHT;
+  wxWindow* canvas = GetOCPNCanvasWindow();
+  if (!canvas) return;
+  setting_scheme_ = true;
+  for (int step = 0; step < 4; ++step) {
+    const PI_ColorScheme now = colour_scheme_ == PI_GLOBAL_COLOR_SCHEME_RGB ? PI_GLOBAL_COLOR_SCHEME_DAY
+                                                                           : colour_scheme_;
+    if (now == wanted) break;
+    wxKeyEvent press(wxEVT_KEY_DOWN);
+    press.m_keyCode = WXK_F5;
+    press.SetEventObject(canvas);
+    canvas->GetEventHandler()->ProcessEvent(press);
+  }
+  setting_scheme_ = false;
+}
+
+void OnlineChartsPi::SetColorScheme(PI_ColorScheme scheme) {
+  colour_scheme_ = scheme;
+  // OpenCPN's dusk or night palette, chosen in OpenCPN itself, is already dark:
+  // the red night, which inverts a light chart, gives way to it.
+  if (!setting_scheme_ && display_level_ == online_charts::kDisplaySteps - 1 &&
+      scheme != PI_GLOBAL_COLOR_SCHEME_DAY && scheme != PI_GLOBAL_COLOR_SCHEME_RGB) {
+    display_level_ = 0;
+    if (quick_panel_) quick_panel_->SetBrightness(display_level_);
+    RequestRefresh(GetOCPNCanvasWindow());
+  }
+  ApplyColourScheme();
+}
+
+// OpenCPN's dialog colours for day, dusk and night, so the panel does not
+// dazzle at night.
+void OnlineChartsPi::ApplyColourScheme() {
+  if (!quick_panel_) return;
+  quick_panel_->SetBrightness(display_level_);
+  wxColour background, text;
+  if (display_level_ == online_charts::kDisplaySteps - 1) {
+    // Red night, like the chart.
+    background = wxColour(10, 0, 0);
+    text = wxColour(200, 40, 40);
+  } else if (display_level_ > 0) {
+    const double b = online_charts::DisplayStepAt(display_level_).brightness;
+    const int grey = static_cast<int>(70 * b);
+    const int light = static_cast<int>(235 * b);
+    background = wxColour(grey, grey, grey);
+    text = wxColour(light, light, light);
+  } else if (colour_scheme_ == PI_GLOBAL_COLOR_SCHEME_DAY || colour_scheme_ == PI_GLOBAL_COLOR_SCHEME_RGB) {
+    background = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+    text = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+  } else if (!GetGlobalColor("DILG1", &background) || !GetGlobalColor("UITX1", &text)) {
+    return;
+  }
+  quick_panel_->SetColours(background, text);
 }
 
 void OnlineChartsPi::ShowPreferencesDialog(wxWindow* parent) {
@@ -479,7 +666,7 @@ void OnlineChartsPi::ShowPreferencesDialog(wxWindow* parent) {
   OnlineChartsSettings updated = settings_;
   OnlineChartsWeatherSettings weather_updated = weather_settings_;
   if (!ShowOnlineChartsPreferences(parent, &updated, overlay_.get(), &weather_updated,
-                                   weather_.get())) {
+                                   weather_.get(), [this]() { return AisStatus(); })) {
     return;
   }
   settings_ = updated;
@@ -487,10 +674,12 @@ void OnlineChartsPi::ShowPreferencesDialog(wxWindow* parent) {
   if (weather_) weather_->Configure(weather_settings_);
   SaveWeatherSettings(weather_settings_);
   if (weather_window_) weather_window_->Sync();
+  if (quick_panel_) quick_panel_->Sync(settings_);
   overlay_enabled_ = settings_.overlay_enabled;
   overlay_->Configure(settings_);
   if (toolbar_tool_id_ >= 0) SetToolbarItemState(toolbar_tool_id_, overlay_enabled_);
   SaveSettings(settings_);
+  ApplyAis();
   wxLogMessage(
       "Online Charts: preferences saved; overlay=%s cache_mode=%d label_scale=%d%%",
       overlay_enabled_ ? "On" : "Off", static_cast<int>(settings_.cache_mode),
@@ -509,9 +698,15 @@ bool OnlineChartsPi::RenderGLOverlay(wxGLContext*, PlugIn_ViewPort*) { return fa
 bool OnlineChartsPi::RenderOverlayMultiCanvas(wxDC& dc, PlugIn_ViewPort* viewport,
                                               int canvasIndex, int priority) {
   (void)canvasIndex;
+  if (priority == OVERLAY_OVER_UI) {
+    if (display_level_ == 0 || !viewport) return false;
+    online_charts::DrawDisplayFilterDc(dc, display_level_, viewport->pix_width, viewport->pix_height);
+    return true;
+  }
   // The wxDC canvas has no chart-level pass; OpenCPN draws tide and current
   // stations after the legacy pass there, so they stay visible.
   if (priority != OVERLAY_LEGACY || !overlay_enabled_ || !overlay_) return false;
+  ViewChanged(viewport);
   bool drawn = overlay_->Render(dc, viewport);
   if (weather_ && viewport && viewport->bValid) {
     piDC weather_dc(dc);
@@ -526,15 +721,23 @@ bool OnlineChartsPi::RenderGLOverlayMultiCanvas(wxGLContext* context,
                                                 PlugIn_ViewPort* viewport,
                                                 int canvasIndex, int priority) {
   (void)canvasIndex;
+  // The display brightness covers everything OpenCPN draws on the chart, last.
+  if (priority == OVERLAY_OVER_UI) {
+    if (display_level_ == 0) return false;
+    online_charts::DrawDisplayFilterGl(display_level_);
+    return true;
+  }
   if (!overlay_enabled_ || !overlay_) return false;
   // Base map, bathymetry and seamarks behave like a chart: they are drawn in
   // the chart pass, below OpenCPN's routes, waypoints and tide and current
   // stations. Hosts without that pass get them in the legacy pass instead.
   if (priority == kOverlayCharts) {
     charts_pass_seen_ = true;
+    ViewChanged(viewport);
     return overlay_->Render(context, viewport);
   }
   if (priority != OVERLAY_LEGACY) return false;
+  if (!charts_pass_seen_) ViewChanged(viewport);
   bool drawn = charts_pass_seen_ ? false : overlay_->Render(context, viewport);
   if (weather_ && viewport && viewport->bValid) {
     weather_->Render(nullptr, viewport, online_charts::GlPixelScale());
@@ -543,11 +746,52 @@ bool OnlineChartsPi::RenderGLOverlayMultiCanvas(wxGLContext* context,
   return drawn;
 }
 
+void OnlineChartsPi::ApplyAis() {
+  if (!ais_) return;
+  const bool on = overlay_enabled_ && settings_.ais_demo;
+  ais_->SetEnabled(on);
+  if (on) {
+    ais_log_count_ = 0;
+    ais_log_timer_.Start(60000);
+  } else {
+    ais_log_timer_.Stop();
+  }
+  if (overlay_) overlay_->SetExtraCredits(ais_->Credits());
+}
+
+// The AIS demo follows the chart, and its sources are credited on it.
+void OnlineChartsPi::ViewChanged(PlugIn_ViewPort* viewport) {
+  if (!viewport || !viewport->bValid) return;
+  if (std::isfinite(viewport->view_scale_ppm) && viewport->view_scale_ppm > 0.0) {
+    view_scale_ppm_ = viewport->view_scale_ppm;
+  }
+  if (!ais_) return;
+  if (!ais_->Enabled()) return;
+  ais_->SetView(viewport->lat_min, viewport->lon_min, viewport->lat_max, viewport->lon_max);
+  if (overlay_) overlay_->SetExtraCredits(ais_->Credits());
+}
+
+wxString OnlineChartsPi::AisStatus() const {
+  if (!ais_) return wxString();
+  wxString text = ais_->StatusText();
+  if (!ais_->Enabled()) return text;
+  // How many targets OpenCPN itself now tracks, from any source.
+  if (ArrayOfPlugIn_AIS_Targets* targets = GetAISTargetArray()) {
+    text += wxString::Format(L" \u00b7 OpenCPN AIS targets: %u", static_cast<unsigned>(targets->GetCount()));
+    for (size_t i = 0; i < targets->GetCount(); ++i) delete targets->Item(i);
+    delete targets;
+  }
+  return text;
+}
+
 void OnlineChartsPi::SetPositionFix(PlugIn_Position_Fix& fix) {
   if (!std::isfinite(fix.Lat) || !std::isfinite(fix.Lon) ||
       fix.Lat < -90.0 || fix.Lat > 90.0 || fix.Lon < -180.0 || fix.Lon > 180.0) {
     return;
   }
+  own_lat_ = fix.Lat;
+  own_lon_ = fix.Lon;
+  has_own_position_ = true;
   // OpenCPN keeps reporting the last own-ship position, with a current time
   // and a course of 0, when no GPS is connected; the speed is then unknown
   // (NaN). Only a live fix (speed or satellites) places the weather at the boat.

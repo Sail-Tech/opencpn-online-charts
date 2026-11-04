@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 
 #include <wx/event.h>
@@ -18,6 +19,7 @@
 class OnlineChartsHttp : public wxEvtHandler {
  public:
   using Callback = std::function<void(bool ok, long status, std::string body)>;
+  using DataCallback = std::function<void(const std::string& chunk)>;
 
   explicit OnlineChartsHttp(const wxString& user_agent);
   ~OnlineChartsHttp() override;
@@ -26,6 +28,13 @@ class OnlineChartsHttp : public wxEvtHandler {
   // called in that case.
   bool Get(const wxString& url, Callback callback,
            const wxString& accept = "application/json");
+  // A long-lived GET (server-sent events): on_data receives the body as it
+  // arrives, then on_done runs once when the stream ends or fails (its body is
+  // empty). Returns the request id, or 0 when it could not be started.
+  int Stream(const wxString& url, DataCallback on_data, Callback on_done,
+             const wxString& accept = "text/event-stream");
+  // Cancels one request without calling its callbacks.
+  void Cancel(int id);
   // Cancels every request without calling its callback.
   void CancelAll();
   size_t Active() const { return requests_.size(); }
@@ -33,6 +42,7 @@ class OnlineChartsHttp : public wxEvtHandler {
  private:
   struct Pending {
     Callback callback;
+    DataCallback on_data;  // Set for streams.
     std::string body;
 #if wxUSE_WEBREQUEST
     wxWebRequest request;
@@ -43,9 +53,16 @@ class OnlineChartsHttp : public wxEvtHandler {
   };
 
   void Complete(int id, bool ok, long status);
+  int Start(const wxString& url, Callback callback, DataCallback on_data, const wxString& accept);
 #if wxUSE_WEBREQUEST
   void OnState(wxWebRequestEvent& event);
+  void OnData(wxWebRequestEvent& event);
+  void CancelRequest(int id, wxWebRequest& request);
   wxWebSession session_;
+  // Cancelled requests whose end wxWidgets has not reported yet. URLSession
+  // and WinHTTP report it from another thread, through this handler, so the
+  // handler must outlive them.
+  std::set<int> cancelling_;
 #else
   void OnTimer(wxTimerEvent& event);
   void* multi_ = nullptr;

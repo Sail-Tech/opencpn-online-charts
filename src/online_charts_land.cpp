@@ -10,6 +10,7 @@
 #include <wx/mstream.h>
 
 #include "ocpn_plugin.h"
+#include "online_charts_depth.h"
 #include "online_charts_http.h"
 #include "pidc.h"
 
@@ -17,6 +18,14 @@ namespace {
 
 constexpr int kMinZoom = 4;
 constexpr int kMaxZoom = 15;
+// Esri World Ocean Base: global through z10, regional detail up to z16.
+constexpr int kEsriGlobalZoom = 10;
+constexpr int kEsriMaxZoom = 16;
+// Open Waters elevation raster: 512-pixel tiles, so one zoom level below a
+// 256-pixel map's, detailed to about z15 where surveys allow.
+constexpr int kDepthProvider = 3;
+constexpr int kDepthMaxZoom = 15;
+constexpr size_t kMaxDepthTiles = 40;  // 1 MB each in memory.
 constexpr size_t kMaxVisibleTiles = 48;
 constexpr size_t kMaxMemoryTiles = 128;
 constexpr size_t kMaxRequests = 4;
@@ -46,7 +55,7 @@ double TileLatitude(int y, int zoom) {
 
 OnlineChartsLandLayer::OnlineChartsLandLayer()
     : http_(std::make_unique<OnlineChartsHttp>(
-          "OnlineCharts-OpenCPN/1.5.3 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {}
+          "OnlineCharts-OpenCPN/1.6.0 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {}
 
 OnlineChartsLandLayer::~OnlineChartsLandLayer() { Shutdown(); }
 
@@ -55,15 +64,23 @@ size_t OnlineChartsLandLayer::ActiveRequests() const { return pending_tiles_.siz
 size_t OnlineChartsLandLayer::QueuedRequests() const { return download_queue_.size(); }
 
 void OnlineChartsLandLayer::Configure(bool enabled, int provider,
-                                      bool allow_network) {
-  provider = std::max(0, std::min(2, provider));
+                                      bool allow_network, int opacity) {
+  provider = std::max(0, std::min(kDepthProvider, provider));
   if (provider != provider_) {
     CancelRequests();
     download_queue_.clear();
     queued_tiles_.clear();
     ClearImages();
     failed_tiles_.clear();
+    missing_tiles_.clear();
     last_error_.clear();
+  }
+  const auto alpha = static_cast<unsigned char>(
+      std::lround(std::max(0, std::min(100, opacity)) * 2.55));
+  if (alpha != alpha_) {
+    // The wxDC canvas bakes the opacity into its scaled bitmaps.
+    for (auto& entry : images_) entry.second.scaled = wxBitmap();
+    alpha_ = alpha;
   }
   provider_ = provider;
   enabled_ = enabled;
@@ -73,6 +90,18 @@ void OnlineChartsLandLayer::Configure(bool enabled, int provider,
     download_queue_.clear();
     queued_tiles_.clear();
   }
+}
+
+void OnlineChartsLandLayer::SetDepthColours(int scheme) {
+  scheme = scheme == online_charts::kDepthTopo ? online_charts::kDepthTopo : online_charts::kDepthChart;
+  if (scheme == depth_colours_) return;
+  depth_colours_ = scheme;
+  // The colours are made when a tile is decoded, so the tiles are fetched again.
+  CancelRequests();
+  download_queue_.clear();
+  queued_tiles_.clear();
+  ClearImages();
+  failed_tiles_.clear();
 }
 
 void OnlineChartsLandLayer::CancelRequests() {
@@ -114,9 +143,10 @@ OnlineChartsLandLayer::VisibleTiles(PlugIn_ViewPort* viewport) const {
   std::vector<TileKey> keys;
   int zoom = ZoomForViewport(viewport);
   if (zoom < kMinZoom || !viewport) return keys;
-  // World Ocean Base has global coverage through z10, but detailed tiles are
-  // regional. Overzoom z10 instead of leaving oceans blank when z11+ returns 404.
-  zoom = std::min(provider_ == 1 ? 10 : (provider_ == 2 ? 18 : kMaxZoom), zoom);
+  if (provider_ == kDepthProvider) zoom = std::min(kDepthMaxZoom, zoom - 1);
+  // World Ocean Base has global coverage through z10, and detailed tiles up to
+  // z16 in some regions. Missing ones (404) are replaced by their parent.
+  zoom = std::min(provider_ == 1 ? kEsriMaxZoom : (provider_ == 2 ? 18 : kMaxZoom), zoom);
 
   double lat_min = viewport->lat_min;
   double lat_max = viewport->lat_max;
@@ -179,8 +209,29 @@ OnlineChartsLandLayer::VisibleTiles(PlugIn_ViewPort* viewport) const {
   return keys;
 }
 
+std::vector<OnlineChartsLandLayer::TileKey>
+OnlineChartsLandLayer::AvailableTiles(const std::vector<TileKey>& keys) const {
+  if (provider_ != 1 || missing_tiles_.empty()) return keys;
+  std::vector<TileKey> result;
+  std::set<std::string> unique;
+  for (TileKey key : keys) {
+    while (key.z > kEsriGlobalZoom && missing_tiles_.count(key.id)) {
+      key.z -= 1;
+      key.x >>= 1;
+      key.y >>= 1;
+      key.id = TileId(key.z, key.x, key.y);
+    }
+    if (unique.insert(key.id).second) result.push_back(key);
+  }
+  // Coarser tiles first, so detailed neighbours are drawn over them.
+  std::stable_sort(result.begin(), result.end(),
+                   [](const TileKey& a, const TileKey& b) { return a.z < b.z; });
+  return result;
+}
+
 void OnlineChartsLandLayer::TrimMemoryCache() {
-  while (images_.size() > kMaxMemoryTiles) {
+  const size_t limit = provider_ == kDepthProvider ? kMaxDepthTiles : kMaxMemoryTiles;
+  while (images_.size() > limit) {
     auto oldest = images_.begin();
     for (auto it = images_.begin(); it != images_.end(); ++it) {
       if (it->second.last_used < oldest->second.last_used) oldest = it;
@@ -206,7 +257,7 @@ size_t OnlineChartsLandLayer::Render(piDC* dc, PlugIn_ViewPort* viewport,
     textures_to_delete_.clear();
   }
   if (!enabled_) return 0;
-  const auto keys = VisibleTiles(viewport);
+  const auto keys = AvailableTiles(VisibleTiles(viewport));
   const size_t drawn = dc ? RenderDc(*dc, viewport, keys) : RenderGl(viewport, keys);
   QueueDownloads(keys);
   return drawn;
@@ -217,12 +268,13 @@ size_t OnlineChartsLandLayer::RenderGl(PlugIn_ViewPort* viewport,
   size_t drawn = 0;
   glEnable(GL_TEXTURE_2D);
   glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-  glColor4ub(255, 255, 255, 255);
+  // GL_MODULATE multiplies every texel by this colour, so its alpha is the opacity.
+  glColor4ub(255, 255, 255, alpha_);
   for (const auto& key : keys) {
     // Use the tile itself, or a loaded parent tile magnified while it downloads.
     CachedImage* cached = nullptr;
     int level = 0;
-    for (; level <= 4 && key.z - level >= 0; ++level) {
+    for (; level <= 6 && key.z - level >= 0; ++level) {
       auto found = images_.find(TileId(key.z - level, key.x >> level, key.y >> level));
       if (found != images_.end() && found->second.image.IsOk()) {
         cached = &found->second;
@@ -238,7 +290,9 @@ size_t OnlineChartsLandLayer::RenderGl(PlugIn_ViewPort* viewport,
       glBindTexture(GL_TEXTURE_2D, texture);
       glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      // Depth colours keep sharp band edges, as the extension's nearest resampling.
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                      provider_ == kDepthProvider ? GL_NEAREST : GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
       if (image.HasAlpha()) {
@@ -332,10 +386,17 @@ size_t OnlineChartsLandLayer::RenderDc(piDC& dc, PlugIn_ViewPort* viewport,
     // Rescale only when the drawn size changes, not on every frame.
     wxBitmap& bitmap = found->second.scaled;
     if (!bitmap.IsOk() || bitmap.GetWidth() != width || bitmap.GetHeight() != height) {
-      bitmap = wxBitmap(found->second.image.Scale(width, height, wxIMAGE_QUALITY_BILINEAR));
+      wxImage scaled = found->second.image.Scale(width, height, wxIMAGE_QUALITY_BILINEAR);
+      if (alpha_ < 255) {
+        if (!scaled.HasAlpha()) scaled.InitAlpha();
+        unsigned char* alpha = scaled.GetAlpha();
+        const size_t pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+        for (size_t i = 0; alpha && i < pixels; ++i) alpha[i] = static_cast<unsigned char>(alpha[i] * alpha_ / 255);
+      }
+      bitmap = wxBitmap(scaled);
     }
     if (bitmap.IsOk()) {
-      dc.DrawBitmap(bitmap, north_west.x, north_west.y, found->second.image.HasAlpha());
+      dc.DrawBitmap(bitmap, north_west.x, north_west.y, found->second.image.HasAlpha() || alpha_ < 255);
       ++drawn;
     }
   }
@@ -378,8 +439,10 @@ void OnlineChartsLandLayer::StartDownload(const TileKey& key) {
         "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/"
         "World_Ocean_Base/MapServer/tile/%d/%d/%d?blankTile=false",
         key.z, key.y, key.x);
-  } else {
+  } else if (provider_ == 2) {
     url = wxString::Format("https://tiles.openseamap.org/seamark/%d/%d/%d.png", key.z, key.x, key.y);
+  } else {
+    url = wxString::Format("https://tiles.openwaters.io/seascape/%d/%d/%d.webp", key.z, key.x, key.y);
   }
   pending_tiles_.insert(key.id);
   const bool started = http_->Get(
@@ -387,7 +450,7 @@ void OnlineChartsLandLayer::StartDownload(const TileKey& key) {
       [this, key](bool ok, long status, std::string body) {
         CompleteDownload(key, ok || status > 0, status, body);
       },
-      "image/png, image/jpeg, image/*;q=0.8");
+      provider_ == kDepthProvider ? "image/webp" : "image/png, image/jpeg, image/*;q=0.8");
   if (!started) {
     pending_tiles_.erase(key.id);
     failed_tiles_[key.id] = std::time(nullptr);
@@ -400,10 +463,38 @@ void OnlineChartsLandLayer::CompleteDownload(const TileKey& key, bool transport_
   pending_tiles_.erase(key.id);
   if (shutdown_) return;
   bool success = false;
-  if (provider_ == 2 && transport_ok && (http_status == 404 || http_status == 204)) {
+  if ((provider_ == 2 || provider_ == kDepthProvider) && transport_ok &&
+      (http_status == 404 || http_status == 204)) {
     // No seamarks in this tile: remember it as empty instead of retrying.
     images_[key.id] = CachedImage{wxImage(), ++use_counter_};
     success = true;
+  } else if (provider_ == 1 && transport_ok && http_status == 404 && key.z > kEsriGlobalZoom) {
+    // No detailed Esri tile here: its parent is requested and drawn instead.
+    missing_tiles_.insert(key.id);
+    success = true;
+  } else if (provider_ == kDepthProvider && transport_ok && http_status == 200 && !bytes.empty()) {
+    // Elevations (terrarium WebP) turned into depth colours, land transparent.
+    int width = 0, height = 0;
+    std::vector<uint8_t> rgba;
+    if (online_charts::DecodeDepthTile(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(),
+                                       depth_colours_, &width, &height, &rgba)) {
+      wxImage image(width, height, false);
+      image.InitAlpha();
+      unsigned char* rgb = image.GetData();
+      unsigned char* alpha = image.GetAlpha();
+      const size_t pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+      for (size_t i = 0; i < pixels; ++i) {
+        rgb[i * 3 + 0] = rgba[i * 4 + 0];
+        rgb[i * 3 + 1] = rgba[i * 4 + 1];
+        rgb[i * 3 + 2] = rgba[i * 4 + 2];
+        alpha[i] = rgba[i * 4 + 3];
+      }
+      images_[key.id] = CachedImage{image, ++use_counter_};
+      TrimMemoryCache();
+      failed_tiles_.erase(key.id);
+      last_error_.clear();
+      success = true;
+    }
   } else if (transport_ok && http_status == 200 && !bytes.empty()) {
     wxMemoryInputStream stream(bytes.data(), bytes.size());
     wxImage image;
@@ -420,14 +511,15 @@ void OnlineChartsLandLayer::CompleteDownload(const TileKey& key, bool transport_
     failed_tiles_[key.id] = std::time(nullptr);
     if (http_status > 0) {
       last_error_ = wxString::Format("%s server returned HTTP %ld",
-                                     provider_ == 2 ? "Seamark" : "Base map", http_status);
+                                     provider_ == 2 ? "Seamark" : (provider_ == kDepthProvider ? "Depth colour" : "Base map"), http_status);
     } else if (!transport_ok) {
       last_error_ = "Base map network request failed";
     } else {
-      last_error_ = "The base map response was not a valid PNG or JPEG image";
+      last_error_ = provider_ == kDepthProvider ? "A depth colour tile was not a valid WebP image"
+                                                : "The base map response was not a valid PNG or JPEG image";
     }
     wxLogWarning("Online Charts: %s tile %s failed; HTTP=%ld transport=%d",
-                 provider_ == 2 ? "seamark" : "base map",
+                 provider_ == 2 ? "seamark" : (provider_ == kDepthProvider ? "depth colour" : "base map"),
                  wxString::FromUTF8(key.id.c_str()), http_status, transport_ok ? 1 : 0);
   }
   StartQueuedDownloads();

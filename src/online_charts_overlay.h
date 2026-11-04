@@ -25,6 +25,11 @@
 #include "online_charts_render.h"
 
 class OnlineChartsLandLayer;
+
+namespace online_charts {
+// Colour of a depth band (its DRVAL1, in metres) in the Topo depth colours.
+wxColour TopoDepthColour(double drval1);
+}  // namespace online_charts
 class PlugIn_ViewPort;
 class piDC;
 class wxDC;
@@ -42,8 +47,14 @@ struct OnlineChartsSettings {
   bool show_soundings = true;
   bool show_shading = true;
   bool show_status = true;
-  bool show_base_map = true;
+  // The base map is an opaque raster drawn over the OpenCPN charts (plug-ins
+  // cannot draw beneath them), so it is off unless asked for.
+  bool show_base_map = false;
   int base_map_provider = 1;  // 0 = OpenStreetMap, 1 = Esri World Ocean Base.
+  int base_map_opacity = 60;  // Percent; below 100 the OpenCPN chart shows through.
+  int depth_colours = 0;      // 0 = Chart (light blues), 1 = Topo (a colour per depth band).
+  int depth_opacity = 70;     // Percent opacity of the depth colours.
+  bool ais_demo = false;      // Live AIS from Open Waters into OpenCPN's AIS targets.
   bool show_seamarks = true;  // OpenSeaMap buoys, lights, beacons and areas.
   bool depth_feet = false;
   int label_scale = 100;  // Percent of the zoom-dependent depth label size.
@@ -62,6 +73,7 @@ struct OnlineChartsStatus {
   size_t drawn_soundings = 0;
   size_t base_tiles = 0;
   size_t seamark_tiles = 0;
+  size_t depth_tiles = 0;
   size_t memory_tiles = 0;
   size_t disk_tiles = 0;
   size_t active_requests = 0;
@@ -85,6 +97,8 @@ class OnlineChartsOverlay : public wxEvtHandler {
 
   void Configure(const OnlineChartsSettings& settings);
   const OnlineChartsSettings& Settings() const { return settings_; }
+  // Extra attribution lines drawn with the chart credits (the AIS demo's sources).
+  void SetExtraCredits(const std::vector<wxString>& lines) { extra_credits_ = lines; }
   void Shutdown();
   bool Render(wxDC& dc, PlugIn_ViewPort* viewport);
   bool Render(wxGLContext* context, PlugIn_ViewPort* viewport);
@@ -105,9 +119,9 @@ class OnlineChartsOverlay : public wxEvtHandler {
   // first OpenGL use instead of tessellating every polygon on every frame.
   struct AreaMesh {
     std::vector<float> triangles;
-    wxColour colour;
     double rank = 0.0;
     double drval1 = 0.0;
+    bool has_drval1 = false;
   };
 
   struct CacheEntry {
@@ -188,7 +202,9 @@ class OnlineChartsOverlay : public wxEvtHandler {
 #endif
   std::unique_ptr<OnlineChartsLandLayer> base_map_;
   std::unique_ptr<OnlineChartsLandLayer> seamarks_;  // OpenSeaMap, drawn above the bathymetry.
+  std::unique_ptr<OnlineChartsLandLayer> depth_;     // Depth colours from the Open Waters raster.
   OnlineChartsSettings settings_;
+  std::vector<wxString> extra_credits_;
   wxString cache_dir_;
   std::unordered_map<std::string, CacheEntry> cache_;
   std::map<int, PendingRequest> requests_;  // Stable storage for libcurl callbacks.

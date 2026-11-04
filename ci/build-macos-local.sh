@@ -41,9 +41,9 @@ ARCH_FLAGS=()
 for arch in $ARCHS; do ARCH_FLAGS+=(-arch "$arch"); done
 # shellcheck disable=SC2206
 COMMON=("${ARCH_FLAGS[@]}" -mmacosx-version-min=11.0 -O2 -fPIC -fvisibility=hidden ${EXTRA_CFLAGS:-}
-        -DNDEBUG -DocpnUSE_GL -DGL_SILENCE_DEPRECATION
+        -DNDEBUG -DocpnUSE_GL -DGL_SILENCE_DEPRECATION "-DWEBP_EXTERN=extern"
         -I"$OUT" -I"$ROOT/src" -I"$ROOT/opencpn-libs/api-18"
-        -I"$ROOT/opencpn-libs/plugin_dc/dc_utils/include" -I"$ROOT/libs/civetweb")
+        -I"$ROOT/opencpn-libs/plugin_dc/dc_utils/include" -I"$ROOT/libs/civetweb" -I"$ROOT/libs/libwebp")
 # shellcheck disable=SC2207
 WXFLAGS=($("$WXCONFIG" --prefix="$WXDEPS" --cxxflags))
 
@@ -62,7 +62,7 @@ compile() {
   fi
 }
 pids=()
-for src in "${SOURCES[@]}" "$ROOT/libs/civetweb/civetweb.c"; do
+for src in "${SOURCES[@]}" "$ROOT/libs/civetweb/civetweb.c" "$ROOT"/libs/libwebp/src/*/*.c; do
   compile "$src" &
   pids+=($!)
   if [ "${#pids[@]}" -ge "$JOBS" ]; then wait "${pids[0]}"; pids=("${pids[@]:1}"); fi

@@ -1,6 +1,10 @@
 #ifndef ONLINE_CHARTS_PREFERENCES_H_
 #define ONLINE_CHARTS_PREFERENCES_H_
 
+#include <functional>
+
+#include <wx/string.h>
+
 #include "online_charts_overlay.h"
 #include "online_charts_weather.h"
 
@@ -12,6 +16,7 @@ class wxWindow;
 bool ShowOnlineChartsPreferences(wxWindow* parent, OnlineChartsSettings* settings,
                                  OnlineChartsOverlay* overlay,
                                  OnlineChartsWeatherSettings* weather_settings,
-                                 OnlineChartsWeather* weather);
+                                 OnlineChartsWeather* weather,
+                                 const std::function<wxString()>& ais_status);
 
 #endif  // ONLINE_CHARTS_PREFERENCES_H_
