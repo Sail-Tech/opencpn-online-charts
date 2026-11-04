@@ -35,6 +35,14 @@ A native [OpenCPN](https://opencpn.org) plugin that draws free online marine dat
 1. Download the package for your system from the [Releases](../../releases) page:
    - **macOS 11 or later**, universal (Intel and Apple Silicon): `OnlineCharts-…-darwin-wx32-10-universal.tar.gz`.
    - **Debian 12 / Ubuntu-based Linux**, x86-64: `OnlineCharts-…-debian-x86_64-12-x86_64.tar.gz`.
+   - **Raspberry Pi OS** (Raspberry Pi 3 or later), one package per Raspberry Pi OS release and per 32 or 64 bits:
+
+     | Raspberry Pi OS | 32-bit | 64-bit |
+     |---|---|---|
+     | Bookworm (Debian 12) | `OnlineCharts-…-debian-armhf-12-armhf.tar.gz` | `OnlineCharts-…-debian-arm64-12-arm64.tar.gz` |
+     | Trixie (Debian 13) | `OnlineCharts-…-debian-armhf-13-armhf.tar.gz` | `OnlineCharts-…-debian-arm64-13-arm64.tar.gz` |
+
+     `cat /etc/debian_version` gives the release (12.x is Bookworm, 13.x is Trixie) and `dpkg --print-architecture` says `armhf` (32-bit) or `arm64` (64-bit). OpenCPN refuses a package for another Debian release with *Incompatible import plugin detected*.
    - **Windows 10/11** with a 32-bit OpenCPN (every Windows OpenCPN from 5.8 to 5.14.0): `OnlineCharts-…-msvc-wx32-10-x86.tar.gz`.
    - **Windows 10/11** with a 64-bit OpenCPN (5.14.2 or later): `OnlineCharts-…-msvc-64-10-x86_64.tar.gz`.
 
@@ -150,7 +158,7 @@ Requirements:
 - OpenGL and GLU development files.
 - On Linux, also libcurl development files: the distributions' wxWidgets builds disable `wxWebRequest`, so the plugin uses libcurl there.
 
-The OpenCPN plugin API headers, the OpenCPN plugin libraries and CivetWeb are included in the repository. Each build writes the import `.tar.gz`, its XML metadata and a SHA-256 file to `build/`. GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml)) builds all three platforms on every push to `main`.
+The OpenCPN plugin API headers, the OpenCPN plugin libraries and CivetWeb are included in the repository. Each build writes the import `.tar.gz`, its XML metadata and a SHA-256 file to `build/`. GitHub Actions ([`.github/workflows/build.yml`](.github/workflows/build.yml)) builds macOS, Windows, Debian 12 and the four Raspberry Pi packages on every push to `main`.
 
 ### Debian 12 (x86-64)
 
@@ -162,6 +170,17 @@ cmake --build build --target tarball --parallel
 ```
 
 On a distribution whose OpenCPN reports a different plugin target (for example Kali Linux, which reports `debian-x86_64` with version `n/a`), set `OCPN_TARGET_TUPLE` to the values shown in OpenCPN's plugin catalog.
+
+### Raspberry Pi OS
+
+On the Raspberry Pi itself, with the same packages as for Debian 12, the target names the Debian release and the architecture, for example on a 64-bit Trixie:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release '-DOCPN_TARGET_TUPLE=debian-arm64;13;arm64'
+cmake --build build --target tarball --parallel
+```
+
+Use `debian-armhf;12;armhf` and so on for the other three. The CI builds them in `debian:12` and `debian:13` containers: arm64 on an Arm runner, armhf under QEMU.
 
 ### Windows 10/11 (Visual Studio 2022)
 

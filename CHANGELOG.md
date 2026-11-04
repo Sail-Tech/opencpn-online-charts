@@ -6,6 +6,8 @@ Release history of the OpenCPN Online Charts plugin, newest first. Build and val
 
 **Windows.** The Weather window and the preferences showed garbled characters on Windows, for example `Â°C` instead of `°C`, `â€”` instead of `—` and ` Â· ` instead of ` · `, and the forecast model list could show a broken *Météo-France*. The Microsoft compiler read the UTF-8 source files in the Windows code page. The Windows build now compiles with `/utf-8`, and the three status lines in the preferences that used plain `char` text are now wide strings, which wxWidgets on Windows does not convert through the code page. No other changes.
 
+**Raspberry Pi.** Added to the 1.5.3 release after it was published: packages for Raspberry Pi OS on the Raspberry Pi 3 or later, 32-bit (`debian-armhf`) and 64-bit (`debian-arm64`), for Bookworm (Debian 12) and Trixie (Debian 13). OpenCPN accepts a Debian package only for its own Debian release, so there is one package per release. Same code as the other 1.5.3 packages.
+
 ## 1.5.2 — Windows crash when enabling the plugin
 
 **Windows.** OpenCPN crashed as soon as the plugin was enabled. OpenCPN 5.14.2 ships an old C++ runtime (`msvcp140.dll` 14.12, from Visual Studio 2017) next to `opencpn.exe`, and the plugin is built with Visual Studio 2022, whose `std::mutex` needs runtime 14.40 or later since version 17.10. The local dashboard server's first lock was an access violation inside `msvcp140.dll` (`_Mtx_lock`). The Windows build now defines `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR`, Microsoft's documented fix for older runtimes. No other changes.

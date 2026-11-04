@@ -30,6 +30,45 @@ jobs:
             build/*.xml
             build/*.sha256
 
+  raspberry-pi:
+    # Raspberry Pi OS (Pi 3 and later), 32-bit (armhf) and 64-bit (arm64), on Bookworm
+    # (Debian 12) and Trixie (Debian 13). OpenCPN accepts a debian-* package only when
+    # its Debian major version is the host's, so each release needs its own package.
+    # arm64 builds natively on an Arm runner; armhf runs under QEMU on x86-64.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { debian: 12, arch: armhf, platform: linux/arm/v7, runner: ubuntu-24.04 }
+          - { debian: 12, arch: arm64, platform: linux/arm64, runner: ubuntu-24.04-arm }
+          - { debian: 13, arch: armhf, platform: linux/arm/v7, runner: ubuntu-24.04 }
+          - { debian: 13, arch: arm64, platform: linux/arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.arch == 'armhf'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+      - name: Build import tarball
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} \
+            -e GITHUB_RUN_NUMBER -e GITHUB_RUN_ID \
+            -v "$PWD:/src" -w /src debian:${{ matrix.debian }} bash -ec '
+              apt-get update
+              apt-get install -y --no-install-recommends cmake g++ make gettext git libwxgtk3.2-dev libcurl4-openssl-dev libgl1-mesa-dev libglu1-mesa-dev file ca-certificates
+              git config --global --add safe.directory /src
+              cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DOCPN_TARGET_TUPLE=debian-${{ matrix.arch }};${{ matrix.debian }};${{ matrix.arch }}"
+              cmake --build build --target tarball --parallel $(nproc)
+              find build -name "*.so" -path "*lib/opencpn*" -exec file {} +'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OnlineCharts-RaspberryPi-debian${{ matrix.debian }}-${{ matrix.arch }}
+          path: |
+            build/*.tar.gz
+            build/*.xml
+            build/*.sha256
+
   windows:
     # build-windows.bat uses the Visual Studio 2022 generator. x64 is for the
     # 64-bit OpenCPN 5.14+, Win32 for the 32-bit OpenCPN 5.8-5.12.
