@@ -28,7 +28,7 @@ const DisplayStep kSteps[kDisplaySteps] = {
     {"Dusk 75%", -1, 0.75, false, false},
     {"Dusk 55%", -1, 0.55, false, false},
     {"Dusk 40%", -1, 0.40, false, false},
-    {"Night", 0, 0.80, true, true},
+    {"Night", 0, 0.95, true, true},
 };
 
 }  // namespace
@@ -64,6 +64,13 @@ void DrawDisplayFilterGl(int level) {
   if (step.invert) {
     // destination = 1 - destination
     glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    Quad();
+  }
+  if (step.red) {
+    // destination = destination x destination: more contrast, so the background
+    // goes nearly black while the lines stay bright (the extension's contrast).
+    glBlendFunc(GL_ZERO, GL_DST_COLOR);
     glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
     Quad();
   }

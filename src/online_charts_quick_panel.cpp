@@ -36,6 +36,34 @@ wxBoxSizer* Row(wxWindow* parent, wxSizer* sizer, const wxString& label) {
   return row;
 }
 
+// A check box with its label as separate text: native check boxes on macOS
+// keep black text, unreadable on the dusk and night backgrounds. Clicking the
+// text toggles the box.
+wxCheckBox* AddCheckRow(wxWindow* parent, wxSizer* sizer, const wxString& label, bool bold,
+                        std::vector<wxWindow*>* labels) {
+  auto* row = new wxBoxSizer(wxHORIZONTAL);
+  auto* check = new wxCheckBox(parent, wxID_ANY, wxEmptyString);
+  auto* text = new wxStaticText(parent, wxID_ANY, label);
+  if (bold) {
+    wxFont font = text->GetFont();
+    font.SetWeight(wxFONTWEIGHT_BOLD);
+    text->SetFont(font);
+  }
+  text->Bind(wxEVT_LEFT_DOWN, [check](wxMouseEvent&) {
+    if (!check->IsEnabled()) return;
+    check->SetValue(!check->GetValue());
+    wxCommandEvent changed(wxEVT_CHECKBOX, check->GetId());
+    changed.SetEventObject(check);
+    changed.SetInt(check->GetValue() ? 1 : 0);
+    check->GetEventHandler()->ProcessEvent(changed);
+  });
+  row->Add(check, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+  row->Add(text, 1, wxALIGN_CENTER_VERTICAL);
+  sizer->Add(row, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, kPad);
+  if (labels) labels->push_back(text);
+  return check;
+}
+
 void Recolour(wxWindow* window, const wxColour& background, const wxColour& text) {
   // Native buttons keep their own look; panels, labels and check boxes follow the scheme.
   if (!wxDynamicCast(window, wxButton) && !wxDynamicCast(window, wxToggleButton)) {
@@ -68,11 +96,7 @@ OnlineChartsQuickPanel::OnlineChartsQuickPanel(wxWindow* parent, const OnlineCha
   panel_ = new wxPanel(this);
   auto* main = new wxBoxSizer(wxVERTICAL);
 
-  enabled_ = new wxCheckBox(panel_, wxID_ANY, "Show Online Charts on the chart");
-  wxFont bold = enabled_->GetFont();
-  bold.SetWeight(wxFONTWEIGHT_BOLD);
-  enabled_->SetFont(bold);
-  main->Add(enabled_, 0, wxLEFT | wxRIGHT | wxTOP, kPad);
+  enabled_ = AddCheckRow(panel_, main, "Show Online Charts on the chart", true, &always_enabled_);
   enabled_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { Apply(); });
 
   // The extension's brightness steps: OpenCPN's dusk scheme darkened further,
@@ -89,21 +113,18 @@ OnlineChartsQuickPanel::OnlineChartsQuickPanel(wxWindow* parent, const OnlineCha
   Heading(panel_, main, "Depths");
   depth_ = AddSegments(panel_, Row(panel_, main, "Colours"), {"Off", "Chart", "Topo"});
   depth_opacity_ = AddSlider(panel_, main, "Opacity", &depth_opacity_value_);
-  contours_ = new wxCheckBox(panel_, wxID_ANY, "Contours and soundings");
-  main->Add(contours_, 0, wxLEFT | wxRIGHT | wxTOP, kPad);
+  contours_ = AddCheckRow(panel_, main, "Contours and soundings", false, nullptr);
   contours_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { Apply(); });
   units_ = AddSegments(panel_, Row(panel_, main, "Units"), {"m", "ft"});
 
   Heading(panel_, main, "Base map (covers the OpenCPN chart)");
   base_map_ = AddSegments(panel_, Row(panel_, main, "Source"), {"Off", "Esri", "OSM"});
   base_opacity_ = AddSlider(panel_, main, "Opacity", &base_opacity_value_);
-  seamarks_ = new wxCheckBox(panel_, wxID_ANY, "OpenSeaMap seamarks");
-  main->Add(seamarks_, 0, wxLEFT | wxRIGHT | wxTOP, kPad);
+  seamarks_ = AddCheckRow(panel_, main, "OpenSeaMap seamarks", false, nullptr);
   seamarks_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { Apply(); });
 
   Heading(panel_, main, "AIS demo (testing only, not for navigation)");
-  ais_ = new wxCheckBox(panel_, wxID_ANY, "Live vessels from Open Waters AIS");
-  main->Add(ais_, 0, wxLEFT | wxRIGHT | wxTOP, kPad);
+  ais_ = AddCheckRow(panel_, main, "Live vessels from Open Waters AIS", false, nullptr);
   ais_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { Apply(); });
   ais_status_ = new wxStaticText(panel_, wxID_ANY, wxEmptyString);
   wxFont small_font = ais_status_->GetFont();

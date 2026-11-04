@@ -1,5 +1,9 @@
 # Build and validation status
 
+## Version 1.6.1 — Red night mode contrast and readable panel at night
+
+Checked in OpenCPN 5.14.2 on an Intel Mac (local build with a temporary screenshot hook, not in releases), over the Solent near Cowes with the OSM base map at 60 %, Chart and Topo colours, seamarks and the AIS demo (33 targets). Night pixels: open water 166 → 29 (was 71 in 1.6.0), black lines → bright red. The panel's labels show in red on black at night. The Windows, Linux and Raspberry Pi packages were built in CI but not run.
+
 ## Version 1.6.0 — Base map off over charts, depth colours by band and AIS demo
 
 Built and run in Debian's OpenCPN under Xvfb (amd64 containers): 5.10.2 on Debian 12 (bookworm-backports) and 5.14.1 on Debian 13 (trixie-backports), with the settings of a 1.5.3 user (base map on, no `SettingsVersion`), and with the local macOS build (x86-64) in OpenCPN 5.14.2 on an Intel Mac.

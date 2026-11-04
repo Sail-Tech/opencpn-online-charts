@@ -24,7 +24,7 @@ double Area(const std::array<double, 4>& b) { return (b[2] - b[0]) * (b[3] - b[1
 OnlineChartsAis::OnlineChartsAis(Sink sink)
     : sink_(std::move(sink)),
       http_(std::make_unique<OnlineChartsHttp>(
-          "OnlineCharts-OpenCPN/1.6.0 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {
+          "OnlineCharts-OpenCPN/1.6.1 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {
   timer_.SetOwner(this);
   Bind(wxEVT_TIMER, &OnlineChartsAis::OnTimer, this);
 }

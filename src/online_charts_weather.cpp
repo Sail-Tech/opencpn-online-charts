@@ -319,7 +319,7 @@ const char* OnlineChartsWeather::ModelName(int index) {
 
 OnlineChartsWeather::OnlineChartsWeather()
     : http_(std::make_unique<OnlineChartsHttp>(
-          "OnlineCharts-OpenCPN/1.6.0 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {
+          "OnlineCharts-OpenCPN/1.6.1 (+https://github.com/Sail-Tech/opencpn-online-charts)")) {
   wxFileName dir(wxStandardPaths::Get().GetUserDataDir(), "");
   dir.AppendDir("online_charts_pi");
   dir.AppendDir("weather_cache");

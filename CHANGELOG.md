@@ -2,6 +2,12 @@
 
 Release history of the OpenCPN Online Charts plugin, newest first. Build and validation notes for each release are in [BUILD_STATUS.md](BUILD_STATUS.md).
 
+## 1.6.1 — Red night mode contrast and readable panel at night
+
+**Red night mode.** The night step inverted the chart and kept the red, but without the extension's contrast the water stayed a bright red. The chart is now also squared (dark tones darker, light ones kept) before the red, so the background is nearly black and lines, symbols and vessels stand out in red, as in the GPS Charts extension.
+
+**Quick panel at night.** On macOS the labels of the panel's check boxes stayed black, unreadable on the dusk and night backgrounds. They are now separate text next to each box, in the panel's colours; clicking the text still toggles the box. No other changes.
+
 ## 1.6.0 — Base map off over charts, Topo depth colours and AIS demo
 
 **Base map over the charts.** A user reported that enabling the plugin made their o-charts blurry. OpenCPN draws plugins after its charts, and has no pass below them, so the plugin's base map, on by default and opaque, covered every chart. Esri World Ocean Base was also limited to zoom 10, about 150 m per pixel, and stretched up to 64 times at harbour scale. Now:
